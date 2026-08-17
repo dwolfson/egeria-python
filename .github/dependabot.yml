@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # pyegeria itself (pyproject.toml + uv.lock)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+
+  # my_egeria TUI sub-project (own pyproject.toml)
+  - package-ecosystem: "pip"
+    directory: "/my_egeria"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # the release.yml workflow itself (actions/checkout, actions/setup-python, etc)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
