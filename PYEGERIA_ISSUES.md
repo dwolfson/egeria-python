@@ -172,7 +172,7 @@ re-test candidates moved into *Awaiting re-test* below the open sections.
   create-from-template) and 7 (`viewElementGUID`) are still open.
 
 **Open pyegeria items**
-- ISSUE-182: an element hidden by zone security (403-020) was reported as AUTHORIZATION_ERROR_401 (fixed for 6.2.33)
+- ISSUE-182: an element hidden by zone security (403-020) was reported as AUTHORIZATION_ERROR_401 (fix ready on branch, release deferred: coordinated with Portal + trellis)
 - ISSUE-181 (HIGH): Dr.Egeria Parent ID on an Update deleted an unrelated relationship of the parent type, e.g. a folder's member (fixed for 6.2.32; moves to the Appendix on release)
 - ISSUE-174: link methods discarded the new relationship GUID (fixed for 6.2.19; moves to the Appendix on release)
 - ISSUE-155: pyegeria gaps against Egeria `main` since 6.2 (omvs_audit + source diff, V6.2..05a5e982)
@@ -197,7 +197,7 @@ into the entry now, so it isn't rediscovered from scratch later.
 
 ### ISSUE-182: an element hidden by zone security is reported as "AUTHORIZATION_ERROR_401"
 
-**Layer:** pyegeria · **Severity:** medium: misleading diagnosis, no wrong data · **Status:** fixed 2026-11-10 on branch `docs/issue-182-unauthorized-banner`, targets 6.2.33 · **Found:** 2026-11-10 on 6.2.32 (laz), reading a Report zoned `['peterprofile']` as erinoverview; the Architect confirmed `is_not_visible_error` is True for it.
+**Layer:** pyegeria · **Severity:** medium: misleading diagnosis, no wrong data · **Status:** fix ready on branch `docs/issue-182-unauthorized-banner` (de35de47, 2026-11-10); release deferred, coordinated with Portal + trellis (owner 2026-11-10: MEDIUM backlog. First the Portal and trellis match on class + `related_http_code` instead of text; then the release, together with the deferred 401/403 name rename) · **Found:** 2026-11-10 on 6.2.32 (laz), reading a Report zoned `['peterprofile']` as erinoverview; the Architect confirmed `is_not_visible_error` is True for it.
 
 **What:** `get_element_by_guid` as erinoverview on that Report, through `BaseServerClient._async_get_element_by_guid_`, logs a banner that starts:
 
