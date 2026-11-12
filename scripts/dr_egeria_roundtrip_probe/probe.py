@@ -123,6 +123,10 @@ LOCATIONS = {
     "Modifier Classification": ("cls:Modifier", "a naming-standard classification of the term"),
     "Prime Word Classification": ("cls:PrimeWord", "a naming-standard classification of the term"),
     "Is Taxonomy": ("cls:Taxonomy", "a collection-kind classification of the glossary"),
+    "Project Approach": ("cls:ProjectClassification", "ProjectClassification.approach"),
+    "Project Management Style": ("cls:ProjectClassification", "ProjectClassification.managementStyle"),
+    "Project Results Usage": ("cls:ProjectClassification", "ProjectClassification.resultsUsage"),
+    "Project Type": ("clsvalue:", "the classification the value names (Campaign, Task, ...)"),
     "Is Canonical": ("cls:CanonicalVocabulary", "a collection-kind classification of the glossary"),
 }
 
@@ -425,7 +429,9 @@ def classification(element: dict, name: str):
     return walk(element.get("elementHeader") or {})
 
 
-def dig(element: dict, path: str):
+def dig(element: dict, path: str, sent=None):
+    if path.startswith("clsvalue:"):
+        return classification(element, str(sent)) if sent else None
     if path.startswith("cls:"):
         return classification(element, path[4:])
     if path.startswith("rel."):
@@ -491,7 +497,7 @@ def verdict(row, element):
         got = dig(element, path)
     elif row["attribute"] in LOCATIONS:
         path = LOCATIONS[row["attribute"]][0]
-        got = dig(element, path)
+        got = dig(element, path, sent)
     else:
         key = row["property"] or camel(row["variable"])
         path = f"properties.{key}"
@@ -502,7 +508,7 @@ def verdict(row, element):
         if seen:
             return "NOT FOUND", None, f"not at {path}; seen at {seen}"
         return "DROPPED", None, f"absent at {path}"
-    if path.startswith("cls:"):
+    if path.startswith(("cls:", "clsvalue:")):
         stored = {k: v for k, v in got.items() if k not in ("class", "typeName")}
         if row["attribute"] == "Security Tags":
             ok = set(map(str, sent if isinstance(sent, list) else [sent])) <= set(map(str, stored.get("securityLabels") or []))
@@ -512,6 +518,9 @@ def verdict(row, element):
         return "MATCH", got, f"{path} (domain {sent!r} is stored as {got})"
     if norm(kind, got) == norm(kind, sent):
         return "MATCH", got, path
+    if kind == "dict" and isinstance(got, dict) and isinstance(sent, dict) \
+            and all(str(got.get(k)) == str(v) for k, v in sent.items()):
+        return "MATCH", got, f"{path} (sent keys present, with others Dr.Egeria adds)"
     if row["default"] not in (None, "") and norm(kind, got) == norm(kind, row["default"]):
         return "DEFAULTED", got, path
     return "CHANGED", got, path
@@ -652,7 +661,7 @@ def summary_row(log_text: str, command: str, display: str, by_command: bool = Tr
         if len(cells) > 6 and cells[1] == command and display in cells:
             msg = cells[-2] if cells[-1] == "" else cells[-1]
             guid = re.search(r"GUID: ([A-Za-z]*-?[0-9a-f]{8}-[0-9a-f-]{27})", msg)
-            return cells[3], msg, guid.group(1) if guid else None
+            return cells[3], msg, guid.group(1) if guid else None, (cells[6] if len(cells) > 6 else "")
     if not by_command:
         return None
     for line in log_text.splitlines():  # some processors show their own name (e.g. Kafka Server Name), not ours
@@ -660,7 +669,7 @@ def summary_row(log_text: str, command: str, display: str, by_command: bool = Tr
         if len(cells) > 6 and cells[1] == command and cells[3] in ("SUCCESS", "FAILURE"):
             msg = cells[-2] if cells[-1] == "" else cells[-1]
             guid = re.search(r"GUID: ([A-Za-z]*-?[0-9a-f]{8}-[0-9a-f-]{27})", msg)
-            return cells[3], msg, guid.group(1) if guid else None
+            return cells[3], msg, guid.group(1) if guid else None, (cells[6] if len(cells) > 6 else "")
     return None
 
 
@@ -795,7 +804,9 @@ def main(argv=None):
                                 "skipped": dict(skipped)})
                 continue
             bodies = bodies_for(log_text, p["qualified_name"], p["display_name"])
-            reported = not_applied_reports(log_text).get(p["qualified_name"], {})
+            reports = not_applied_reports(log_text)
+            reported = dict(reports.get(row[3], {}) if row and len(row) > 3 else {})
+            reported.update(reports.get(p["qualified_name"], {}))  # processors that derive their own QN
             raw, raw_why, guid = None, None, (el.get("elementHeader") or {}).get("guid")
             fetched = False
             for row in p["rows"]:

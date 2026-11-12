@@ -381,3 +381,25 @@ def test_search_keywords_read_back_by_display_name():
            "variable": "search_keywords", "default": None, "location": None}
     assert probe.verdict(row, element)[0] == "MATCH"
     assert sorted(probe.dig(element, "rel.searchKeywords.displayName")) == ["RTP kw-1", "RTP kw-2"]
+
+
+def test_project_type_reads_the_classification_it_names():
+    element = {"elementHeader": {"projectKinds": [{"classificationName": "Campaign",
+                                                   "classificationProperties": {"class": "CampaignProperties"}}]}}
+    row = {"attribute": "Project Type", "kind": "valid", "sent": "Campaign", "property": None,
+           "variable": "project_type", "default": None, "location": None}
+    assert probe.verdict(row, element)[0] == "MATCH"
+
+
+def test_a_stored_dict_with_extra_keys_matches():
+    row = {"attribute": "Additional Properties", "kind": "dict", "sent": {"rtpKey": "x"}, "property": None,
+           "variable": "additional_properties", "default": None, "location": None}
+    assert probe.verdict(row, {"properties": {"additionalProperties": {"rtpKey": "x", "other": "y"}}})[0] == "MATCH"
+
+
+def test_summary_row_returns_the_qualified_name_dr_egeria_used():
+    log = ("│ Create ToDo │ Create ToDo │ SUCCESS │ No │ RTP CreateTodo DisplayName X │ "
+           "Coco Pharmaceuticals::ToDo::RTP-x │ Executed Create ToDo (GUID: 5d2a1857-27fb-4615-aaae-e90e362f09b5) │")
+    status, message, guid, qn = probe.summary_row(log, "Create ToDo", "RTP CreateTodo DisplayName X")
+    assert status == "SUCCESS" and guid == "5d2a1857-27fb-4615-aaae-e90e362f09b5"
+    assert qn == "Coco Pharmaceuticals::ToDo::RTP-x"
