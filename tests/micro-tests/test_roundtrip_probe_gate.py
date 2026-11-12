@@ -362,3 +362,22 @@ def test_up_refuses_below_15_gb(monkeypatch, tmp_path):
 
 def test_send_rejected_is_the_default():
     assert probe.SEND_REJECTED is True
+
+
+# ── read-back locations (F-B) ──
+
+def test_domain_names_compare_as_egerias_numbers():
+    assert probe.domain_number("Data") == 1 and probe.domain_number("All Domains") == 0
+    assert probe.domain_number("IT Infrastructure") == 4 and probe.domain_number("Nonsense") == "Nonsense"
+    row = {"attribute": "Domain Identifier", "kind": "valid", "sent": "Data", "property": "domainIdentifier",
+           "variable": "domain_identifier", "default": "All Domains", "location": None}
+    assert probe.verdict(row, {"properties": {"domainIdentifier": 1}})[0] == "MATCH"
+
+
+def test_search_keywords_read_back_by_display_name():
+    element = {"searchKeywords": [{"relatedElement": {"properties": {"displayName": "RTP kw-2"}}},
+                                  {"relatedElement": {"properties": {"displayName": "RTP kw-1"}}}]}
+    row = {"attribute": "Search Keywords", "kind": "list", "sent": ["RTP kw-1", "RTP kw-2"], "property": None,
+           "variable": "search_keywords", "default": None, "location": None}
+    assert probe.verdict(row, element)[0] == "MATCH"
+    assert sorted(probe.dig(element, "rel.searchKeywords.displayName")) == ["RTP kw-1", "RTP kw-2"]

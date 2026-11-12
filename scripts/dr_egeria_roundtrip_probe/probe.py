@@ -109,8 +109,34 @@ LOCATIONS = {
     "Retention Classification": ("cls:Retention", "a governance classification, stored as a basis"),
     "Security Tags": ("cls:SecurityTags", "the SecurityTags classification in the header"),
     "Policy Management Point": ("cls:PolicyManagementPoint", "a classification in the header"),
-    "Search Keywords": ("rel.searchKeywords.keyword", "keywords are SearchKeyword elements linked to the element"),
+    "Search Keywords": ("rel.searchKeywords.displayName",
+                        "keywords are SearchKeyword elements (SearchKeywordProperties.displayName) linked to the element"),
+    # glossary-term flags and naming markers are header classifications in Egeria 6 (F-B group 1)
+    "Is Abstract Concept": ("cls:AbstractConcept", "a classification of the term"),
+    "Is Activity Description": ("cls:ActivityDescription", "a classification of the term"),
+    "Term Activity Type": ("cls:ActivityDescription", "ActivityDescription.activityType"),
+    "Is Context": ("cls:ContextDefinition", "a classification of the term"),
+    "Context Description": ("cls:ContextDefinition", "ContextDefinition.description"),
+    "Context Scope": ("cls:ContextDefinition", "ContextDefinition.scope"),
+    "Is Data Value": ("cls:DataValueMeaning", "a classification of the term"),
+    "Class Word Classification": ("cls:ClassWord", "a naming-standard classification of the term"),
+    "Modifier Classification": ("cls:Modifier", "a naming-standard classification of the term"),
+    "Prime Word Classification": ("cls:PrimeWord", "a naming-standard classification of the term"),
+    "Is Taxonomy": ("cls:Taxonomy", "a collection-kind classification of the glossary"),
+    "Is Canonical": ("cls:CanonicalVocabulary", "a collection-kind classification of the glossary"),
 }
+
+#: Attributes Dr.Egeria sends as Egeria's governance-domain number (GovernanceDomains: DATA = 1, ...), not the name.
+DOMAIN_ATTRIBUTES = {"Domain Identifier", "Role Domain Identifier"}
+
+
+def domain_number(name):
+    """A governance-domain name ("Data", "All Domains", "IT Infrastructure") as the number Egeria stores."""
+    from pyegeria.core._globals import GovernanceDomains
+    key = re.sub(r"[^A-Z0-9]+", "_", str(name).upper()).strip("_")
+    key = {"ALL_DOMAINS": "ALL"}.get(key, key)
+    member = GovernanceDomains.__members__.get(key)
+    return member.value if member else name
 
 
 # ── Guard ──
@@ -437,6 +463,8 @@ def find_value(node, wanted, path=""):
 def norm(kind, value):
     if value is None:
         return None
+    if kind == "list" and isinstance(value, list):
+        return sorted(str(v) for v in value)   # the order Egeria returns linked elements in isn't meaningful
     if kind == "date":
         return str(value)[:10]
     if kind == "valid":
@@ -480,6 +508,8 @@ def verdict(row, element):
             ok = set(map(str, sent if isinstance(sent, list) else [sent])) <= set(map(str, stored.get("securityLabels") or []))
             return ("MATCH" if ok else "CHANGED"), stored, path
         return "MATCH", stored, f"{path} present (Dr.Egeria sends the valid value as a level number)"
+    if row["attribute"] in DOMAIN_ATTRIBUTES and str(got) == str(domain_number(sent)):
+        return "MATCH", got, f"{path} (domain {sent!r} is stored as {got})"
     if norm(kind, got) == norm(kind, sent):
         return "MATCH", got, path
     if row["default"] not in (None, "") and norm(kind, got) == norm(kind, row["default"]):
