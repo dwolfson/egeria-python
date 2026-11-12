@@ -403,3 +403,7 @@ def test_summary_row_returns_the_qualified_name_dr_egeria_used():
     status, message, guid, qn = probe.summary_row(log, "Create ToDo", "RTP CreateTodo DisplayName X")
     assert status == "SUCCESS" and guid == "5d2a1857-27fb-4615-aaae-e90e362f09b5"
     assert qn == "Coco Pharmaceuticals::ToDo::RTP-x"
+
+
+def test_external_source_guid_is_a_control_attribute():
+    assert probe.plan({"name": "External Source GUID", "style": "GUID"}, "X")[0] == "SKIPPED (control)"

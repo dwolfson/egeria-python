@@ -58,6 +58,7 @@ CONTROL_ATTRIBUTES = {
     "Parent at End1": "names the parent relationship's end (phase 2)",
     "Journal Entry": "creates a note-log entry, a separate element (phase 2)",
     "Effective Time": "a request option (the time to query as of), not a property",
+    "External Source GUID": "provenance option (with External Source Name); needs a registered external source",
     "As Of Time": "a request option, not a property",
     "Display Name": "set by the probe's naming convention and checked as such",
     "Template GUID": "names a template element; needs a real target (phase 2)",
