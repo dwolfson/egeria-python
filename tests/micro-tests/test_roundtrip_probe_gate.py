@@ -274,3 +274,20 @@ def test_send_rejected_only_unblocks_the_pyegeria_side_attributes(monkeypatch):
     assert probe.plan({"name": "Extended Properties", "style": "Dictionary"}, "X")[0].startswith("REJECTED")
     monkeypatch.setattr(probe, "SEND_REJECTED", False)
     assert probe.plan({"name": "Parent Relationship Attributes", "style": "Dictionary"}, "X")[0].startswith("REJECTED")
+
+
+def test_a_command_that_now_creates_brings_its_static_rejected_rows_as_new_rows():
+    base = {"Create Schema Type|": "CREATE-FAILED"}
+    cur = {"Create Schema Type|Description": "MATCH",
+           "Create Schema Type|Extended Properties": "REJECTED (breaks the create)"}
+    result = gate.compare(base, cur, {})
+    assert not result["failed"]
+    assert ("Create Schema Type|Extended Properties", "REJECTED (breaks the create)") in result["new_rows"]
+    assert result["rows_gone"] == [("Create Schema Type|", "CREATE-FAILED")]
+
+
+def test_a_new_rejected_row_in_a_command_that_already_created_still_fails():
+    result = gate.compare({"Create Glossary|Description": "MATCH"},
+                          {"Create Glossary|Description": "MATCH",
+                           "Create Glossary|New Thing": "REJECTED (breaks the create)"}, {})
+    assert result["failed"] and result["new_failures"]

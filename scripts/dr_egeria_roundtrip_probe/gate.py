@@ -91,7 +91,11 @@ def compare(baseline: dict[str, str], current: dict[str, str], known: dict) -> d
     for key, cur in sorted(current.items()):
         if key in baseline:
             continue
-        if is_failure(cur) and known_gap(key, known) is None:
+        command = key.split("|", 1)[0]
+        # A command the baseline couldn't diff (its create failed) has no attribute rows there: its static
+        # REJECTED rows (attributes the probe never sends) are new rows of an improvement, not new failures.
+        newly_diffable = is_failure(baseline.get(f"{command}|")) and key != f"{command}|"
+        if is_failure(cur) and known_gap(key, known) is None and not (newly_diffable and cur.startswith("REJECTED")):
             out["new_failures"].append((key, None, cur))
         else:
             out["new_rows"].append((key, cur))
