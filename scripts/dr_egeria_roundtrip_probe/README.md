@@ -20,7 +20,9 @@ actually stored), and reports what didn't come back. Before every pyegeria relea
   unless the URL is exactly `https://localhost:19443` (or `127.0.0.1`), Docker shows the container
   publishing host port 19443 is `egeria-scratch-roundtrip` labelled `purpose=roundtrip-probe`, and that
   platform's origin answers "Egeria OMAG Server Platform". Ports 9443, 8443 and 7443 are refused on any host.
-- **The scratch platform never reaches the host.** The base image's configuration points its Kafka and
+- **The scratch platform never reaches the host.** `host.docker.internal` is the standard container-to-host
+  address and normal elsewhere; the probe refuses it only for its own scratch platform, whose point is
+  isolation from the host's shared services. The base image's configuration points its Kafka and
   Egeria endpoints at `host.docker.internal`. `scratch.py up` rewrites them to non-host values, removes
   the view-server's Kafka audit-log destination, and **refuses to start if any copied file still names
   `host.docker.internal`**. As a second guard the container runs with
@@ -36,29 +38,48 @@ actually stored), and reports what didn't come back. Before every pyegeria relea
   to a shared event bus. The same day the first full run wrote one test Dashboard Sheet into the real
   `~/.pyegeria/dashboard_sheets.json` (removed). Hence the refusal and the HOME isolation above.
 
-## Scratch platform (option A)
+## Scratch platform
 
 ```bash
-python scripts/dr_egeria_roundtrip_probe/scratch.py up [--digest sha256:...]   # default: the laz pin
-python scripts/dr_egeria_roundtrip_probe/scratch.py status                     # also laz's StartedAt, read-only
+python scripts/dr_egeria_roundtrip_probe/scratch.py up [--digest sha256:<64 hex>] [--repository postgres|memory]
+python scripts/dr_egeria_roundtrip_probe/scratch.py status      # also laz's StartedAt, read-only
 python scripts/dr_egeria_roundtrip_probe/scratch.py down
 ```
 
-`up` pulls `odpi/egeria-platform` by digest, copies the image's `/deployments/data` and
-`application.properties` into `~/.re-gate/roundtrip-probe/scratch-<UTC>/`, and applies the edits:
+`up` refuses unless the Docker VM has at least 15 GB free (the 2026-11-04 disk-full took a shared
+PostgreSQL down), pulls `odpi/egeria-platform` by digest (a tag is refused), copies the image's
+`/deployments/data` and `application.properties` into `~/.re-gate/roundtrip-probe/scratch-<UTC>/`, and
+applies the edits:
 
 1. `view-server.config`: every `"omagserverName":"active-metadata-store"` → `"simple-metadata-store"`, and the
    Kafka audit-log destination removed.
-2. `application.properties`: `startup.server.list=simple-metadata-store,view-server`.
-3. `application.properties`: the image's placeholder JSON typo fixed (`YAMLSecretsStoreProvider".\` → `",\`);
-   without it no server starts.
-4. `kafkaEndpoint` → `kafka-disabled.invalid:9092`, `egeriaEndpoint` → `https://localhost:7443`.
+2. `simple-metadata-store.config`: the **Core Content Pack** is the only archive (the image's SimpleCatalog
+   sample is replaced; no Coco archives).
+3. `application.properties`: the startup list (both servers for `memory`; none for `postgres`, which are
+   configured first, then started), the image's placeholder JSON typo fixed
+   (`YAMLSecretsStoreProvider".\` → `",\`; without it no server starts), `kafkaEndpoint` →
+   `kafka-disabled.invalid:9092`, `egeriaEndpoint` → `https://localhost:7443`, and `repositoryDatabaseURL` →
+   the scratch PostgreSQL container.
 
-Then the refusal check, then `docker run` on `127.0.0.1:19443` with the label, and a wait until both
-servers have started. The repository is in memory: never restart it mid-run. `down` removes the
-container and the scratch configuration (results are kept) and confirms no labelled container is left
-and port 19443 is free. The user is the image's demo `garygeeke`; its password is read from the
-container's own secrets and never printed.
+Then the refusal check, and:
+
+- **`--repository postgres` (default):** the same PostgreSQL OMRS connector a real platform uses, against a
+  throwaway `pgvector/pgvector:pg17` container (`egeria-scratch-roundtrip-pg`) on a **private Docker network**
+  (`roundtrip-net`) with **no host port**, and its own volume (`roundtrip-pg-data`). Its credentials are the
+  image's own `PostgreSQLRepository` secret (passed through a 0600 env file, deleted at once). The metadata
+  store is pointed at it with the image's own sample request (`data/servers/AddPostgreSQLRepository.http`),
+  then both servers are started. **Never a shared PostgreSQL.**
+- **`--repository memory`:** the in-memory repository, as the first runs used. It returns type-prefixed GUIDs
+  (`Glossary-<uuid>`) a PostgreSQL store doesn't, so its results can differ from a real platform's.
+
+The platform runs on `127.0.0.1:19443` with the label, and `up` waits until both servers have started, then
+creates the probe user's personal profile (`my-profile/new`) so the commands that need one (Create ToDo,
+Meeting, Review, ...) can run. The user is the image's demo `garygeeke`; passwords are read from the image's
+own secrets and never printed. Never restart the platform mid-run.
+
+`down` removes the platform and PostgreSQL containers, the private network, the volume and the scratch
+configuration (results are kept), and confirms no labelled container, network or volume is left and port
+19443 is free.
 
 ## Running the probe
 
@@ -84,8 +105,9 @@ such as Search Keywords, and header fields);
 `NOT APPLIED (reported)` (not sent, and Dr.Egeria's output says so: a `not applied: <attribute>: <reason>`
 warning, the reason in the note);
 `REJECTED (breaks the create)` (an attribute whose probe value makes Egeria reject the whole create,
-listed with its cause in `REJECTED` in `probe.py`; `--send-rejected` sends the pyegeria-side ones again,
-to verify a fix); `CREATE-FAILED`; `AUTH`; `UNRESOLVED`.
+listed with its cause in `REJECTED` in `probe.py`; the pyegeria-side ones are sent anyway by default, since
+F-A, and `--no-send-rejected` skips them; Extended Properties is always skipped); `CREATE-FAILED`; `AUTH`;
+`UNRESOLVED`.
 
 - **Stored (raw)** column: for every non-MATCH row the entity is read through repository-services on the
   scratch metadata store (`POST …/simple-metadata-store/open-metadata/repository-services/users/{u}/instances/entity/{guid}`),

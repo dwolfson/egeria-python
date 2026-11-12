@@ -1,7 +1,8 @@
 name: Dr.Egeria round-trip probe gate
 
 # Before a pyegeria release: a scratch Egeria (in this runner only, never a shared platform) and a
-# round trip of every Dr.Egeria Create command, compared with the committed baseline
+# round trip of every Dr.Egeria Create command (PostgreSQL repository on a private network, Core Content
+# Pack, the pyegeria-side REJECTED attributes sent), compared with the committed baseline
 # (scripts/dr_egeria_roundtrip_probe/baseline/<egeria digest>.json). See that folder's README.
 
 on:

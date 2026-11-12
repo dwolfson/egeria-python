@@ -32,6 +32,9 @@ def image_copy(tmp_path):
     shutil.copy(FIXTURES / "image_config" / "view-server.config",
                 tmp_path / "data" / "servers" / "view-server" / "config" / "view-server.config")
     shutil.copy(FIXTURES / "image_config" / "application.properties", tmp_path / "application.properties")
+    (tmp_path / "data" / "servers" / "simple-metadata-store" / "config").mkdir(parents=True)
+    shutil.copy(FIXTURES / "image_config" / "simple-metadata-store.config",
+                tmp_path / "data" / "servers" / "simple-metadata-store" / "config" / "simple-metadata-store.config")
     return tmp_path
 
 
@@ -291,3 +294,68 @@ def test_a_new_rejected_row_in_a_command_that_already_created_still_fails():
                           {"Create Glossary|Description": "MATCH",
                            "Create Glossary|New Thing": "REJECTED (breaks the create)"}, {})
     assert result["failed"] and result["new_failures"]
+
+
+# ── scratch fidelity: PostgreSQL repository, Core Content Pack, defaults ──
+
+def test_store_loads_only_the_core_content_pack(image_copy):
+    scratch.apply_edits(image_copy, "postgres")
+    text = (image_copy / "data/servers/simple-metadata-store/config/simple-metadata-store.config").read_text()
+    assert "SimpleCatalog" not in text and "content-packs/CoreContentPack.omarchive" in text
+    assert "Coco" not in text
+
+
+def test_postgres_mode_starts_no_server_and_points_at_the_scratch_database(image_copy):
+    scratch.apply_edits(image_copy, "postgres")
+    props = (image_copy / "application.properties").read_text()
+    assert "startup.server.list=\n" in props + "\n" or "startup.server.list=" in props.splitlines()
+    assert '"repositoryDatabaseURL" : "jdbc:postgresql://egeria-scratch-roundtrip-pg:5432/egeria",\\' in props
+    assert "localhost:5432" not in props
+
+
+def test_memory_mode_starts_both_servers(image_copy):
+    scratch.apply_edits(image_copy, "memory")
+    assert "startup.server.list=simple-metadata-store,view-server" in (image_copy / "application.properties").read_text()
+
+
+def test_down_removes_containers_network_and_volume(monkeypatch, tmp_path):
+    calls = []
+    state = {"ps": ["egeria-scratch-roundtrip", "egeria-scratch-roundtrip-pg"], "network": ["roundtrip-net"],
+             "volume": ["roundtrip-pg-data"]}
+
+    def fake_docker(*args, check=True):
+        calls.append(args)
+        if args[0] == "ps":
+            return "\n".join(state["ps"])
+        if args[:2] == ("network", "ls"):
+            return "\n".join(state["network"])
+        if args[:2] == ("volume", "ls"):
+            return "\n".join(state["volume"])
+        if args[0] == "rm":
+            state["ps"].remove(args[-1])
+        if args[:2] == ("network", "rm"):
+            state["network"].remove(args[-1])
+        if args[:2] == ("volume", "rm"):
+            state["volume"].remove(args[-1])
+        return ""
+    monkeypatch.setattr(scratch, "docker", fake_docker)
+    monkeypatch.setattr(scratch, "port_free", lambda port=19443: True)
+    scratch.down(tmp_path)
+    assert ("network", "rm", "roundtrip-net") in calls and ("volume", "rm", "roundtrip-pg-data") in calls
+    assert ("rm", "-f", "egeria-scratch-roundtrip-pg") in calls
+
+
+def test_up_refuses_below_15_gb(monkeypatch, tmp_path):
+    monkeypatch.setattr(scratch, "labelled", lambda: [])
+    monkeypatch.setattr(scratch, "labelled_networks", lambda: [])
+    monkeypatch.setattr(scratch, "labelled_volumes", lambda: [])
+    monkeypatch.setattr(scratch, "port_free", lambda port=19443: True)
+    monkeypatch.setattr(scratch, "docker", lambda *a, **k: "present")
+    monkeypatch.setattr(scratch, "docker_free_gb", lambda image: 9.5)
+    with pytest.raises(SystemExit) as exc:
+        scratch.up(scratch.DEFAULT_DIGEST, tmp_path)
+    assert "9.5 GB free" in str(exc.value)
+
+
+def test_send_rejected_is_the_default():
+    assert probe.SEND_REJECTED is True

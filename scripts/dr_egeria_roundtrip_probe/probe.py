@@ -91,12 +91,12 @@ REJECTED = {
         "pyegeria-side: Simple Float sent as the string \"7.5\"; Egeria's field is a Long, 400 "
         "'Cannot deserialize value of type java.lang.Long from String'"),
 }
-#: The pyegeria-side REJECTED attributes: with --send-rejected the probe sends them again, so a pyegeria
-#: fix (F-A: typed bodies, Long coercion) shows as created-and-reported instead of a lost create.
+#: The pyegeria-side REJECTED attributes: sent by default (they used to break the whole create; F-A made
+#: pyegeria send them typed or report them not applied), skipped only with --no-send-rejected.
 #: Extended Properties stays skipped: Egeria rejecting an arbitrary key there is correct (input-side).
 SENDABLE_REJECTED = {"Parent Relationship Attributes", "Template Properties", "Generic Initial Classifications",
                      "Absolute Uncertainty", "Relative Uncertainty"}
-SEND_REJECTED = False  # set by --send-rejected
+SEND_REJECTED = True  # the default since F-A; --no-send-rejected restores the old skip
 
 #: Where an attribute is stored when it is not `properties.<camelCase>` -- one row per known place.
 LOCATIONS = {
@@ -673,8 +673,10 @@ def main(argv=None):
     ap.add_argument("--baseline", help="baseline file (default: baseline/<egeria digest>.json)")
     ap.add_argument("--known-gaps", help="known gaps file (default: known-gaps.json beside this script)")
     ap.add_argument("--rebaseline", action="store_true", help="after --run, write the baseline from this run")
-    ap.add_argument("--send-rejected", action="store_true",
-                    help="send the pyegeria-side REJECTED attributes too (verifies the F-A fixes)")
+    ap.add_argument("--send-rejected", dest="send_rejected", action="store_true", default=True,
+                    help="send the pyegeria-side REJECTED attributes (the default)")
+    ap.add_argument("--no-send-rejected", dest="send_rejected", action="store_false",
+                    help="skip them, as before F-A")
     args = ap.parse_args(argv)
 
     guard(args.url)  # before anything else touches the platform

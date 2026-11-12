@@ -187,8 +187,10 @@ def main(argv=None):
     ap.add_argument("--digest", help="the platform image digest (default: scratch.py's laz pin)")
     ap.add_argument("--out", default="~/.re-gate/roundtrip-probe")
     ap.add_argument("--keep-up", action="store_true", help="leave the scratch platform running afterwards")
-    ap.add_argument("--send-rejected", action="store_true",
-                    help="probe the pyegeria-side REJECTED attributes too (see probe.py SENDABLE_REJECTED)")
+    ap.add_argument("--no-send-rejected", action="store_true",
+                    help="skip the pyegeria-side REJECTED attributes (they're sent by default)")
+    ap.add_argument("--repository", default="postgres", choices=("postgres", "memory"),
+                    help="the scratch platform's repository (default postgres, as a real platform)")
     args = ap.parse_args(argv)
     if args.digest:
         import scratch as _scratch  # noqa: E402 (beside this file)
@@ -204,10 +206,10 @@ def main(argv=None):
     import scratch
     out = Path(args.out).expanduser()
     out.mkdir(parents=True, exist_ok=True)
-    scratch.up(args.digest or scratch.DEFAULT_DIGEST, out)
+    scratch.up(args.digest or scratch.DEFAULT_DIGEST, out, args.repository)
     try:
         before = set(out.glob("RESULTS-*.json"))
-        probe.main(["--run", "--out", str(out)] + (["--send-rejected"] if args.send_rejected else []))
+        probe.main(["--run", "--out", str(out)] + (["--no-send-rejected"] if args.no_send_rejected else []))
         results = max(set(out.glob("RESULTS-*.json")) - before, key=lambda p: p.stat().st_mtime)
         results.with_suffix(".md").write_text(report.render(json.loads(results.read_text())), encoding="utf-8")
         code = gate_results(results, baseline, known, args.rebaseline)
