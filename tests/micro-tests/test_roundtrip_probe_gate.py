@@ -248,3 +248,29 @@ def test_scratch_cli_refuses_a_tag_before_docker(monkeypatch):
 def test_gate_cli_refuses_a_tag_before_anything():
     with pytest.raises(scratch.Refused):
         gate.main(["--digest", "latest"])
+
+
+# ── "not applied" reports from Dr.Egeria's warnings section ──
+
+def test_not_applied_reports_are_read_per_qualified_name():
+    log = """Processing Warnings:
+
+-- Create Governance Action Process (RTP::X::CreateGovernanceActionProcess) --
+   - not applied: Parent Relationship Attributes: it needs a Parent Relationship Type Name to say which relationship properties these are (rtpKey)
+   - some other warning
+-- Create Data Value Specification (RTP::X::CreateDataValueSpecification) --
+   - not applied: Absolute Uncertainty: '7.5' isn't a whole number; Egeria stores it as an integer
+"""
+    reports = probe.not_applied_reports(log)
+    assert reports["RTP::X::CreateGovernanceActionProcess"] == {
+        "Parent Relationship Attributes": "it needs a Parent Relationship Type Name to say which relationship "
+                                          "properties these are (rtpKey)"}
+    assert reports["RTP::X::CreateDataValueSpecification"]["Absolute Uncertainty"].startswith("'7.5' isn't")
+
+
+def test_send_rejected_only_unblocks_the_pyegeria_side_attributes(monkeypatch):
+    monkeypatch.setattr(probe, "SEND_REJECTED", True)
+    assert probe.plan({"name": "Parent Relationship Attributes", "style": "Dictionary"}, "X")[1] is not None
+    assert probe.plan({"name": "Extended Properties", "style": "Dictionary"}, "X")[0].startswith("REJECTED")
+    monkeypatch.setattr(probe, "SEND_REJECTED", False)
+    assert probe.plan({"name": "Parent Relationship Attributes", "style": "Dictionary"}, "X")[0].startswith("REJECTED")

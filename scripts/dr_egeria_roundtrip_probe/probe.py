@@ -91,6 +91,13 @@ REJECTED = {
         "pyegeria-side: Simple Float sent as the string \"7.5\"; Egeria's field is a Long, 400 "
         "'Cannot deserialize value of type java.lang.Long from String'"),
 }
+#: The pyegeria-side REJECTED attributes: with --send-rejected the probe sends them again, so a pyegeria
+#: fix (F-A: typed bodies, Long coercion) shows as created-and-reported instead of a lost create.
+#: Extended Properties stays skipped: Egeria rejecting an arbitrary key there is correct (input-side).
+SENDABLE_REJECTED = {"Parent Relationship Attributes", "Template Properties", "Generic Initial Classifications",
+                     "Absolute Uncertainty", "Relative Uncertainty"}
+SEND_REJECTED = False  # set by --send-rejected
+
 #: Where an attribute is stored when it is not `properties.<camelCase>` -- one row per known place.
 LOCATIONS = {
     "Zone Membership": ("header.zoneMembership.classificationProperties.zoneMembership",
@@ -230,7 +237,7 @@ def plan(attr, cslug: str):
     name, style = attr["name"], attr.get("style") or "Simple"
     if name in CONTROL_ATTRIBUTES:
         return "SKIPPED (control)", None, CONTROL_ATTRIBUTES[name]
-    if name in REJECTED:
+    if name in REJECTED and not (SEND_REJECTED and name in SENDABLE_REJECTED):
         return "REJECTED (breaks the create)", None, REJECTED[name]
     if style in RELATIONSHIP_STYLES or attr.get("existing_element"):
         return "SKIPPED (relationship – phase 2)", None, f"style {style}" + (", existing_element" if attr.get("existing_element") else "")
@@ -543,6 +550,22 @@ def split_verdict(verdict_: str, stored: str) -> str:
 
 # ── Running ──
 
+def not_applied_reports(log_text: str) -> dict[str, dict[str, str]]:
+    """{qualified name: {attribute: reason}} from Dr.Egeria's "Processing Warnings" section, where a command
+    lists each `not applied: <attribute>: <reason>` under `-- <verb> <object> (<qualified name>) --`."""
+    out: dict[str, dict[str, str]] = {}
+    current = None
+    for line in log_text.splitlines():
+        m = re.match(r"^-- .+ \((.+)\) --\s*$", line.strip())
+        if m:
+            current = out.setdefault(m.group(1), {})
+            continue
+        m = re.match(r"^- not applied: ([^:]+): (.+)$", line.strip())
+        if m and current is not None:
+            current.setdefault(m.group(1).strip(), m.group(2).strip())
+    return out
+
+
 def run_dr_egeria(doc: Path, env: dict, url: str, user: str, log: Path) -> str:
     cmd = [sys.executable, "-m", "commands.cat.dr_egeria", str(doc), "--process", "--advanced", "--debug",
            "--server", VIEW_SERVER, "--url", url, "--userid", user, "--summary-only"]
@@ -650,9 +673,13 @@ def main(argv=None):
     ap.add_argument("--baseline", help="baseline file (default: baseline/<egeria digest>.json)")
     ap.add_argument("--known-gaps", help="known gaps file (default: known-gaps.json beside this script)")
     ap.add_argument("--rebaseline", action="store_true", help="after --run, write the baseline from this run")
+    ap.add_argument("--send-rejected", action="store_true",
+                    help="send the pyegeria-side REJECTED attributes too (verifies the F-A fixes)")
     args = ap.parse_args(argv)
 
     guard(args.url)  # before anything else touches the platform
+    global SEND_REJECTED
+    SEND_REJECTED = args.send_rejected
     from pyegeria import EgeriaTech
     import importlib.metadata as md
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -720,6 +747,7 @@ def main(argv=None):
                                 "skipped": dict(skipped)})
                 continue
             bodies = bodies_for(log_text, p["qualified_name"], p["display_name"])
+            reported = not_applied_reports(log_text).get(p["qualified_name"], {})
             raw, raw_why, guid = None, None, (el.get("elementHeader") or {}).get("guid")
             fetched = False
             for row in p["rows"]:
@@ -729,6 +757,9 @@ def main(argv=None):
                                     "note": row["reason"]})
                     continue
                 v, got, note = verdict(row, el)
+                if v != "MATCH" and row["attribute"] in reported:
+                    # Dr.Egeria said it didn't send this, and why: an answer, not a silent drop
+                    v, note = "NOT APPLIED (reported)", reported[row["attribute"]]
                 r = {"family": fam, "command": p["command"], "attribute": row["attribute"], "style": row["style"],
                      "sent": row["sent"], "read": got, "verdict": v, "note": note}
                 if v != "MATCH":
@@ -749,7 +780,7 @@ def main(argv=None):
     end = dt.datetime.now(dt.timezone.utc)
     meta = {"image": scratch_image(), "laz_started_at_before": laz_before, "laz_started_at_after": laz_started_at(),
             "option": "A (simple-metadata-store + view-server)", "pyegeria": md.version("pyegeria"),
-            "user": args.user, "start": start.isoformat(timespec="seconds"), "end": end.isoformat(timespec="seconds"),
+            "user": args.user, "send_rejected": SEND_REJECTED, "start": start.isoformat(timespec="seconds"), "end": end.isoformat(timespec="seconds"),
             "commands": sum(len(c) for c in families.values()), "run_dir": str(run_dir)}
     results_file = out / f"RESULTS-{stamp}.json"
     results_file.write_text(json.dumps({"meta": meta, "rows": results}, indent=1, default=str))

@@ -183,6 +183,8 @@ def main(argv=None):
     ap.add_argument("--digest", help="the platform image digest (default: scratch.py's laz pin)")
     ap.add_argument("--out", default="~/.re-gate/roundtrip-probe")
     ap.add_argument("--keep-up", action="store_true", help="leave the scratch platform running afterwards")
+    ap.add_argument("--send-rejected", action="store_true",
+                    help="probe the pyegeria-side REJECTED attributes too (see probe.py SENDABLE_REJECTED)")
     args = ap.parse_args(argv)
     if args.digest:
         import scratch as _scratch  # noqa: E402 (beside this file)
@@ -201,7 +203,7 @@ def main(argv=None):
     scratch.up(args.digest or scratch.DEFAULT_DIGEST, out)
     try:
         before = set(out.glob("RESULTS-*.json"))
-        probe.main(["--run", "--out", str(out)])
+        probe.main(["--run", "--out", str(out)] + (["--send-rejected"] if args.send_rejected else []))
         results = max(set(out.glob("RESULTS-*.json")) - before, key=lambda p: p.stat().st_mtime)
         results.with_suffix(".md").write_text(report.render(json.loads(results.read_text())), encoding="utf-8")
         code = gate_results(results, baseline, known, args.rebaseline)

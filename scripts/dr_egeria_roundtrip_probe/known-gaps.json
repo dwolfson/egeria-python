@@ -17,8 +17,8 @@
    "verdict": "NOT RETURNED (stored)"
   },
   "*|Project Scope": {
-   "reason": "owner decision pending: Egeria's Project has no scope property (PROJECT-ATTRIBUTES-MAPPING-2026-11-12.md section 3)",
-   "ref": "BRIEF-PYEGERIA-FB-UNAPPLIED-ATTRIBUTES-2026-11-12.md group 7"
+   "reason": "owner decided 2026-11-12: Project gets no scope property (use relationships such as governedBy or assignedTo); F-B stops sending projectScope and reports it not applied, F-C removes the attribute",
+   "ref": "BRIEF-PYEGERIA-FB-UNAPPLIED-ATTRIBUTES-2026-11-12.md group 7; Coordinator relay 2026-11-12"
   },
   "Create Cited Document|Authors": {
    "reason": "Egeria READ bug: stored, then removed twice by OpenMetadataPropertyConverterBase (removeAuthors in the ExternalReference/DesignModel/DesignModelElement branch and again in the AuthoredReferenceable tail)",

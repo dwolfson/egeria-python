@@ -81,8 +81,11 @@ generated document per family, each `dr_egeria --process --advanced --debug` log
 such as Search Keywords, and header fields);
 `CHANGED`; `DEFAULTED`; `NOT FOUND` (stored under another key: a spec metadata gap);
 `SKIPPED (relationship – phase 2)`, `SKIPPED (control)`, `SKIPPED (no status property)`, …;
+`NOT APPLIED (reported)` (not sent, and Dr.Egeria's output says so: a `not applied: <attribute>: <reason>`
+warning, the reason in the note);
 `REJECTED (breaks the create)` (an attribute whose probe value makes Egeria reject the whole create,
-listed with its cause in `REJECTED` in `probe.py`); `CREATE-FAILED`; `AUTH`; `UNRESOLVED`.
+listed with its cause in `REJECTED` in `probe.py`; `--send-rejected` sends the pyegeria-side ones again,
+to verify a fix); `CREATE-FAILED`; `AUTH`; `UNRESOLVED`.
 
 - **Stored (raw)** column: for every non-MATCH row the entity is read through repository-services on the
   scratch metadata store (`POST …/simple-metadata-store/open-metadata/repository-services/users/{u}/instances/entity/{guid}`),
