@@ -182,6 +182,7 @@ def test_gate_results_fails_without_a_baseline(tmp_path):
 def test_committed_baseline_and_known_gaps_load():
     baseline = json.loads((gate.BASELINE_DIR / "757a5df0.json").read_text())
     assert baseline["rows"]["Create Regulation|Regulators"] == "DROPPED (not stored)"
+    assert all(change["reason"] != "<one-line reason>" for change in baseline.get("changes", {}).values())
     known = json.loads(gate.KNOWN_GAPS.read_text())["gaps"]
     assert all(v.get("reason") and v.get("ref") for v in known.values())
 
