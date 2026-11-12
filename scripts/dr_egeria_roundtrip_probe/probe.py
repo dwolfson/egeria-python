@@ -99,6 +99,11 @@ SENDABLE_REJECTED = {"Parent Relationship Attributes", "Template Properties", "G
                      "Absolute Uncertainty", "Relative Uncertainty"}
 SEND_REJECTED = True  # the default since F-A; --no-send-rejected restores the old skip
 
+#: Attributes that are properties of a link to a parent, so they need a parent to check (phase 2).
+LINK_PROPERTY_ATTRIBUTES = {
+    a: "a property of the AttributeForSchema / NestedSchemaAttribute link to the parent; needs a parent (phase 2)"
+    for a in ("Element Position", "Min Cardinality", "Max Cardinality")}
+
 #: Where an attribute is stored when it is not `properties.<camelCase>` -- one row per known place.
 LOCATIONS = {
     "Zone Membership": ("header.zoneMembership.classificationProperties.zoneMembership",
@@ -286,6 +291,8 @@ def plan(attr, cslug: str):
         return "SKIPPED (control)", None, CONTROL_ATTRIBUTES[name]
     if name in REJECTED and not (SEND_REJECTED and name in SENDABLE_REJECTED):
         return "REJECTED (breaks the create)", None, REJECTED[name]
+    if name in LINK_PROPERTY_ATTRIBUTES:
+        return "SKIPPED (relationship – phase 2)", None, LINK_PROPERTY_ATTRIBUTES[name]
     if style in RELATIONSHIP_STYLES or attr.get("existing_element"):
         return "SKIPPED (relationship – phase 2)", None, f"style {style}" + (", existing_element" if attr.get("existing_element") else "")
     if style not in PHASE1_STYLES:

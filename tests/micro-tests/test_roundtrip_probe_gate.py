@@ -407,3 +407,8 @@ def test_summary_row_returns_the_qualified_name_dr_egeria_used():
 
 def test_external_source_guid_is_a_control_attribute():
     assert probe.plan({"name": "External Source GUID", "style": "GUID"}, "X")[0] == "SKIPPED (control)"
+
+
+def test_schema_link_properties_are_phase_2():
+    for name in ("Element Position", "Min Cardinality", "Max Cardinality"):
+        assert probe.plan({"name": name, "style": "Simple Int"}, "X")[0] == "SKIPPED (relationship – phase 2)"
