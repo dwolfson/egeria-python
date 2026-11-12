@@ -299,11 +299,13 @@ def test_a_new_rejected_row_in_a_command_that_already_created_still_fails():
 
 # ── scratch fidelity: PostgreSQL repository, Core Content Pack, defaults ──
 
-def test_store_loads_only_the_core_content_pack(image_copy):
+def test_store_loads_only_the_listed_content_packs(image_copy):
     scratch.apply_edits(image_copy, "postgres")
     text = (image_copy / "data/servers/simple-metadata-store/config/simple-metadata-store.config").read_text()
-    assert "SimpleCatalog" not in text and "content-packs/CoreContentPack.omarchive" in text
-    assert "Coco" not in text
+    assert "SimpleCatalog" not in text and "Coco" not in text
+    assert scratch.archive_files(text) == list(scratch.CONTENT_PACKS)
+    assert scratch.CONTENT_PACKS[0] == "content-packs/CoreContentPack.omarchive"
+    assert not any("Coco" in pack for pack in scratch.CONTENT_PACKS)
 
 
 def test_postgres_mode_starts_no_server_and_points_at_the_scratch_database(image_copy):

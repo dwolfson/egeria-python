@@ -55,7 +55,15 @@ PG_VOLUME = "roundtrip-pg-data"
 PG_DATABASE = "egeria"
 DATABASE_URL = f"jdbc:postgresql://{PG_CONTAINER}:5432/{PG_DATABASE}"
 STORE_SCHEMA = "repository_simple_metadata_store"
-CONTENT_PACK = "content-packs/CoreContentPack.omarchive"   # the only archive: no Coco content
+#: The archives the metadata store loads: the Core Content Pack plus only those packs that define the
+#: technology types (and their catalog templates) Dr.Egeria's create-from-template commands use. No Coco.
+CONTENT_PACKS = (
+    "content-packs/CoreContentPack.omarchive",
+    "content-packs/UnityCatalogContentPack.omarchive",   # Create UC Server/Catalog/Schema/Table/Function/Volume
+    "content-packs/ApacheKafkaContentPack.omarchive",    # Create Kafka Server Element
+    "content-packs/PostgresContentPack.omarchive",       # Create Postgres Server/Database Element
+    "content-packs/FilesContentPack.omarchive",          # Create CSV Data File / Folder / CSV File templates
+)
 MIN_FREE_GB = 15                      # the 2026-11-04 Docker VM disk-full took the shared PostgreSQL down
 PROBE_USER = "garygeeke"
 REPOSITORIES = ("postgres", "memory")
@@ -103,10 +111,21 @@ def edit_view_server_config(text: str) -> str:
     return json.dumps(config, indent=2)
 
 
-def edit_store_config(text: str) -> str:
-    """The metadata store loads the Core Content Pack (technology types, templates) instead of the image's
-    SimpleCatalog sample archive."""
-    return text.replace("content-packs/SimpleCatalog.omarchive", CONTENT_PACK)
+def edit_store_config(text: str, packs: tuple = CONTENT_PACKS) -> str:
+    """The metadata store loads CONTENT_PACKS (technology types, templates) instead of the image's SimpleCatalog
+    sample archive: one archive connection per pack, each a copy of the image's own connection."""
+    config = json.loads(text)
+    repo = config["repositoryServicesConfig"]
+    template = json.dumps(repo["openMetadataArchiveConnections"][0])
+    repo["openMetadataArchiveConnections"] = [
+        json.loads(template.replace("content-packs/SimpleCatalog.omarchive", pack)) for pack in packs]
+    return json.dumps(config, indent=2)
+
+
+def archive_files(text: str) -> list[str]:
+    """The archive files a server config loads (for the results header)."""
+    connections = json.loads(text)["repositoryServicesConfig"].get("openMetadataArchiveConnections") or []
+    return [c.get("endpoint", {}).get("networkAddress", "") for c in connections]
 
 
 def edit_application_properties(text: str, repository: str = "memory") -> str:
@@ -315,7 +334,7 @@ def start_postgres(folder: Path, image: str) -> None:
     raise SystemExit(f"{PG_CONTAINER} never became ready; see `docker logs {PG_CONTAINER}`")
 
 
-def up(digest: str, out: Path, repository: str = "postgres", timeout: int = 420) -> Path:
+def up(digest: str, out: Path, repository: str = "postgres", timeout: int = 900) -> Path:
     digest = checked_digest(digest)
     if repository not in REPOSITORIES:
         raise SystemExit(f"--repository must be one of {REPOSITORIES}")
@@ -359,7 +378,7 @@ def up(digest: str, out: Path, repository: str = "postgres", timeout: int = 420)
     wait_for_servers(timeout)
     profile = ensure_profile(user_token(image))
     print(f"scratch up: {CONTAINER} on https://localhost:{PORT} ({repository} repository, "
-          f"{CONTENT_PACK.split('/')[-1]}), servers {', '.join(SERVERS)} started, {PROBE_USER} profile "
+          f"{len(CONTENT_PACKS)} content packs), servers {', '.join(SERVERS)} started, {PROBE_USER} profile "
           f"{profile or 'present'}; {free:.0f} GB free; config {folder}")
     return folder
 

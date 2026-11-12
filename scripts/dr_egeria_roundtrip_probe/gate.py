@@ -151,6 +151,7 @@ def write_baseline(path: Path, data: dict, results_name: str) -> dict:
             reason = (old_changes.get(key) or {}).get("reason", "<one-line reason>")
             changes[key] = {"from": old_rows.get(key), "to": new_rows.get(key), "reason": reason}
     baseline = {"egeria_image": meta.get("image"), "pyegeria": meta.get("pyegeria"),
+                "repository": meta.get("repository"), "content_packs": meta.get("content_packs"),
                 "cut_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
                 "from_results": results_name, "rows": new_rows, "changes": changes}
     path.parent.mkdir(parents=True, exist_ok=True)

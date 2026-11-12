@@ -148,6 +148,22 @@ def scratch_image() -> str:
     return proc.stdout.strip() or IMAGE
 
 
+def scratch_setup() -> dict:
+    """The scratch platform's repository and the archives its metadata store loaded (results header)."""
+    pg = subprocess.run(["docker", "inspect", "-f", "{{.State.Status}}", "egeria-scratch-roundtrip-pg"],
+                        capture_output=True, text=True).stdout.strip()
+    info = {"repository": "postgres" if pg == "running" else "memory", "content_packs": []}
+    pointer = Path("~/.re-gate/roundtrip-probe/.current_scratch").expanduser()
+    try:
+        folder = Path(pointer.read_text().strip())
+        config = folder / "data/servers/simple-metadata-store/config/simple-metadata-store.config"
+        connections = json.loads(config.read_text())["repositoryServicesConfig"]["openMetadataArchiveConnections"]
+        info["content_packs"] = [c.get("endpoint", {}).get("networkAddress", "").split("/")[-1] for c in connections]
+    except (OSError, ValueError, KeyError):
+        info["content_packs"] = ["unknown"]
+    return info
+
+
 def laz_started_at():
     """StartedAt of laz's Egeria container when this host has one: a read-only inspect, recorded so a
     run can show it never touched laz."""
@@ -780,7 +796,7 @@ def main(argv=None):
                     r["side"] = side(row, bodies)
                 results.append(r)
     end = dt.datetime.now(dt.timezone.utc)
-    meta = {"image": scratch_image(), "laz_started_at_before": laz_before, "laz_started_at_after": laz_started_at(),
+    meta = {"image": scratch_image(), **scratch_setup(), "laz_started_at_before": laz_before, "laz_started_at_after": laz_started_at(),
             "option": "A (simple-metadata-store + view-server)", "pyegeria": md.version("pyegeria"),
             "user": args.user, "send_rejected": SEND_REJECTED, "start": start.isoformat(timespec="seconds"), "end": end.isoformat(timespec="seconds"),
             "commands": sum(len(c) for c in families.values()), "run_dir": str(run_dir)}

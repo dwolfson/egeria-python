@@ -53,8 +53,10 @@ applies the edits:
 
 1. `view-server.config`: every `"omagserverName":"active-metadata-store"` → `"simple-metadata-store"`, and the
    Kafka audit-log destination removed.
-2. `simple-metadata-store.config`: the **Core Content Pack** is the only archive (the image's SimpleCatalog
-   sample is replaced; no Coco archives).
+2. `simple-metadata-store.config`: the archives are `CONTENT_PACKS` in `scratch.py`: the **Core Content Pack**
+   plus only the packs defining technology types Dr.Egeria's create-from-template commands use (Unity
+   Catalog, Apache Kafka, PostgreSQL, Files). The image's SimpleCatalog sample is replaced; no Coco archives.
+   The repository and the pack list are recorded in each results header and baseline.
 3. `application.properties`: the startup list (both servers for `memory`; none for `postgres`, which are
    configured first, then started), the image's placeholder JSON typo fixed
    (`YAMLSecretsStoreProvider".\` → `",\`; without it no server starts), `kafkaEndpoint` →
