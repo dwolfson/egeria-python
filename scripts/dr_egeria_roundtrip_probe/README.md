@@ -77,7 +77,8 @@ generated document per family, each `dr_egeria --process --advanced --debug` log
 
 `MATCH`; `DROPPED (not stored)` (sent, absent on read-back and absent in the raw store);
 `NOT RETURNED (stored)` (sent, absent on read-back, present in the raw store: an Egeria read gap);
-`DROPPED` (absent on read-back, raw store not checkable: relationships and header fields);
+`DROPPED (raw read not applicable)` (absent on read-back; the raw store can't answer: relationships
+such as Search Keywords, and header fields);
 `CHANGED`; `DEFAULTED`; `NOT FOUND` (stored under another key: a spec metadata gap);
 `SKIPPED (relationship – phase 2)`, `SKIPPED (control)`, `SKIPPED (no status property)`, …;
 `REJECTED (breaks the create)` (an attribute whose probe value makes Egeria reject the whole create,

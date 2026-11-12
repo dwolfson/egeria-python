@@ -30,6 +30,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 BASELINE_DIR = HERE / "baseline"
 KNOWN_GAPS = HERE / "known-gaps.json"
+sys.path.insert(0, str(HERE))
 FAILURES = ("REJECTED", "CREATE-FAILED", "UNRESOLVED")
 
 
@@ -183,6 +184,9 @@ def main(argv=None):
     ap.add_argument("--out", default="~/.re-gate/roundtrip-probe")
     ap.add_argument("--keep-up", action="store_true", help="leave the scratch platform running afterwards")
     args = ap.parse_args(argv)
+    if args.digest:
+        import scratch as _scratch  # noqa: E402 (beside this file)
+        _scratch.checked_digest(args.digest)  # before anything starts
     baseline = Path(args.baseline).expanduser() if args.baseline else None
     known = Path(args.known_gaps).expanduser()
     if args.results:

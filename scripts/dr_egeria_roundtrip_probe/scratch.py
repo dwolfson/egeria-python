@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import re
 import shutil
 import socket
 import subprocess
@@ -44,6 +45,17 @@ EGERIA_ENDPOINT = "https://localhost:7443"       # the container itself
 
 class Refused(SystemExit):
     pass
+
+
+DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}")
+
+
+def checked_digest(digest: str) -> str:
+    """The pin must be a full image digest, `sha256:<64 hex>`: a tag (`latest`, `6.3`) can move under it."""
+    if not DIGEST_RE.fullmatch(digest or ""):
+        raise Refused(f"REFUSED: --digest {digest!r} is not a full image digest (sha256:<64 hex>); "
+                      "a tag can't stand in for the pin")
+    return digest
 
 
 # ── The edits (pure functions, unit-tested on a copied fixture) ──
@@ -135,6 +147,7 @@ def labelled() -> list[str]:
 
 
 def up(digest: str, out: Path, timeout: int = 300) -> Path:
+    digest = checked_digest(digest)
     if labelled():
         raise SystemExit(f"a scratch container already exists ({labelled()}); run `down` first")
     if not port_free():
@@ -205,6 +218,7 @@ def main(argv=None):
     ap.add_argument("--digest", default=DEFAULT_DIGEST, help="the platform image digest (default: the laz pin)")
     ap.add_argument("--out", default="~/.re-gate/roundtrip-probe")
     args = ap.parse_args(argv)
+    checked_digest(args.digest)
     out = Path(args.out).expanduser()
     out.mkdir(parents=True, exist_ok=True)
     if args.action == "up":

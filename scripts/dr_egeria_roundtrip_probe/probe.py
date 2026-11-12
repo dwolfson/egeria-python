@@ -536,7 +536,8 @@ def stored_raw(row: dict, path: str, raw: dict | None, why: str | None):
 def split_verdict(verdict_: str, stored: str) -> str:
     """DROPPED splits on the raw store: not stored at all, or stored and not returned by the read."""
     if verdict_ == "DROPPED":
-        return {"yes": "NOT RETURNED (stored)", "no": "DROPPED (not stored)"}.get(stored, "DROPPED")
+        return {"yes": "NOT RETURNED (stored)", "no": "DROPPED (not stored)"}.get(
+            stored, "DROPPED (raw read not applicable)")
     return verdict_
 
 

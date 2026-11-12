@@ -209,7 +209,7 @@ def test_stored_raw_separates_not_stored_from_not_returned(raw):
     assert probe.stored_raw(authors, "properties.authors", None, "HTTP 404")[0] == "not checked"
     assert probe.split_verdict("DROPPED", "yes") == "NOT RETURNED (stored)"
     assert probe.split_verdict("DROPPED", "no") == "DROPPED (not stored)"
-    assert probe.split_verdict("DROPPED", "not checked") == "DROPPED"
+    assert probe.split_verdict("DROPPED", "not checked") == "DROPPED (raw read not applicable)"
     assert probe.split_verdict("CHANGED", "yes") == "CHANGED"
 
 
@@ -224,3 +224,27 @@ def test_status_plan_uses_the_types_own_field():
     assert (md, location) == ("DRAFT", "properties.contentStatus")
     kind, md, expected, location = probe.status_plan({"OM_TYPE": "Person"}, set())
     assert kind == "SKIPPED (no status property)" and md is None
+
+
+# ── the digest pin (read-back follow-up a) ──
+
+def test_full_digest_is_accepted():
+    assert scratch.checked_digest(scratch.DEFAULT_DIGEST) == scratch.DEFAULT_DIGEST
+
+
+@pytest.mark.parametrize("digest", ["latest", "6.3", "sha256:757a5df0", "sha256:" + "g" * 64,
+                                    "757a5df0db06f526cd92565210eed55ab60adc8e7ab6536a402f33efafc7ea9a", ""])
+def test_a_tag_or_partial_digest_is_refused(digest):
+    with pytest.raises(scratch.Refused):
+        scratch.checked_digest(digest)
+
+
+def test_scratch_cli_refuses_a_tag_before_docker(monkeypatch):
+    monkeypatch.setattr(scratch, "docker", lambda *a, **k: (_ for _ in ()).throw(AssertionError("docker called")))
+    with pytest.raises(scratch.Refused):
+        scratch.main(["up", "--digest", "latest"])
+
+
+def test_gate_cli_refuses_a_tag_before_anything():
+    with pytest.raises(scratch.Refused):
+        gate.main(["--digest", "latest"])
