@@ -1,0 +1,60 @@
+name: Dr.Egeria round-trip probe gate
+
+# Before a pyegeria release: a scratch Egeria (in this runner only, never a shared platform) and a
+# round trip of every Dr.Egeria Create command, compared with the committed baseline
+# (scripts/dr_egeria_roundtrip_probe/baseline/<egeria digest>.json). See that folder's README.
+
+on:
+  workflow_dispatch:
+    inputs:
+      digest:
+        description: "odpi/egeria-platform image digest (default: the pin in scratch.py)"
+        required: false
+        default: ""
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'release') ||
+      startsWith(github.base_ref, 'release/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+        version: "latest"
+
+    - name: Set up Python 3.13
+      uses: actions/setup-python@v7
+      with:
+        python-version: "3.13"
+
+    - name: Install dependencies
+      run: uv sync --all-extras --dev
+
+    - name: Probe gate (scratch up, round trip, compare, scratch down)
+      env:
+        DIGEST: ${{ github.event.inputs.digest }}
+      run: |
+        args=(--out "$RUNNER_TEMP/roundtrip-probe")
+        if [ -n "$DIGEST" ]; then args+=(--digest "$DIGEST"); fi
+        uv run python scripts/dr_egeria_roundtrip_probe/gate.py "${args[@]}"
+
+    - name: Upload results
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: roundtrip-probe-results
+        path: |
+          ${{ runner.temp }}/roundtrip-probe/RESULTS-*
+        if-no-files-found: warn

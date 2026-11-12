@@ -1,80 +1,122 @@
-# Dr.Egeria round-trip probe
+# Dr.Egeria round-trip probe and release gate
 
 Writes a recognisable value into every property-style attribute of every Dr.Egeria Create command,
-runs the documents through `dr_egeria --process`, reads each element back and reports what didn't come
-back (BRIEF-DR-EGERIA-ROUNDTRIP-PROBE-2026-11-12, phase 1).
+runs the documents through `dr_egeria --process`, reads each element back (and reads what Egeria
+actually stored), and reports what didn't come back. Before every pyegeria release it runs as a
+**gate**: no regression against a committed baseline, and every known gap listed with its reason.
 
-## Scratch only
+| File | What it does |
+|---|---|
+| `scratch.py` | `up` / `down` / `status` for the scratch Egeria (scripted; no hand steps) |
+| `probe.py` | the round trip: `--smoke`, `--run`, `--gate`, `--rebaseline` |
+| `gate.py` | the release gate: scratch up → probe → compare → report → scratch down |
+| `report.py` | renders a `RESULTS-<UTC>.json` as markdown |
+| `baseline/<digest>.json` | the committed baseline: one verdict per (command, attribute), per Egeria image digest |
+| `known-gaps.json` | rows accepted as not fixable in pyegeria, each with a reason and a reference |
 
-**This probe never runs against a real Egeria (laz or any shared platform).** `probe.py` refuses to
-start, before any request, unless all of these hold:
+## Hard rules: scratch only
 
-- the URL is exactly `https://localhost:19443` (or `https://127.0.0.1:19443`);
-- Docker shows the container publishing host port 19443 is `egeria-scratch-roundtrip`, labelled
-  `purpose=roundtrip-probe`;
-- that platform's origin answers "Egeria OMAG Server Platform".
-
-Ports 9443, 8443 and 7443 are refused on any host. Its environment is rebuilt: no inherited `EGERIA_*` or
-`PYEGERIA_*` variable, no `.env`, no `config.json`, and `HOME` (with the Dashboard Sheet store and the user
-report-specs folder) inside the run folder, so Dr.Egeria's local stores never touch the real `~/.pyegeria`.
+- **Never a real Egeria** (laz or any shared platform). `probe.py` refuses to start, before any request,
+  unless the URL is exactly `https://localhost:19443` (or `127.0.0.1`), Docker shows the container
+  publishing host port 19443 is `egeria-scratch-roundtrip` labelled `purpose=roundtrip-probe`, and that
+  platform's origin answers "Egeria OMAG Server Platform". Ports 9443, 8443 and 7443 are refused on any host.
+- **The scratch platform never reaches the host.** The base image's configuration points its Kafka and
+  Egeria endpoints at `host.docker.internal`. `scratch.py up` rewrites them to non-host values, removes
+  the view-server's Kafka audit-log destination, and **refuses to start if any copied file still names
+  `host.docker.internal`**. As a second guard the container runs with
+  `--add-host host.docker.internal:127.0.0.1`, so that name resolves to the container itself.
+- **HOME isolation.** The probe's environment inherits no `EGERIA_*` or `PYEGERIA_*` variable, reads no
+  `.env` or `config.json`, and sets `HOME` (with `PYEGERIA_DASHBOARD_SHEETS_STORE` and
+  `PYEGERIA_USER_REPORT_SPECS_DIR`) inside the run folder, so Dr.Egeria's local stores never touch the
+  real `~/.pyegeria`.
+- **History (why the rules are this strict).** On 2026-11-12, before the Kafka edits existed, the first
+  two hand-built scratch starts tried about ten times to reach `host.docker.internal:9192`, which on that
+  host was a shared Kafka. The attempts failed and a read-only check found no trace there (no scratch
+  topic or consumer group), but the default image configuration would have connected a scratch server
+  to a shared event bus. The same day the first full run wrote one test Dashboard Sheet into the real
+  `~/.pyegeria/dashboard_sheets.json` (removed). Hence the refusal and the HOME isolation above.
 
 ## Scratch platform (option A)
 
-Base image `odpi/egeria-platform@sha256:757a5df0…`, servers `simple-metadata-store` (in-memory, no Kafka)
-and `view-server` only. Copy the image's `/deployments/data` and `application.properties` to a scratch
-folder, then in the copies:
-
-1. `view-server.config`: every `"omagserverName":"active-metadata-store"` → `"simple-metadata-store"` (40).
-2. `application.properties`: `startup.server.list=simple-metadata-store,view-server`.
-3. `application.properties`: the image's placeholder JSON has a typo (`YAMLSecretsStoreProvider".\` should be
-   `",\`); without the fix no server starts.
-4. **Never let it reach the host.** The image's placeholders point at `host.docker.internal:9192` (Kafka) and
-   `https://host.docker.internal:7443`, which on a laptop running laz are laz's shared Kafka and a host port.
-   Set `kafkaEndpoint` to `kafka-disabled.invalid:9092` and `egeriaEndpoint` to `https://localhost:7443` (the
-   container itself), remove the Kafka audit-log destination from `view-server.config`, and start the
-   container with `--add-host host.docker.internal:127.0.0.1`.
-
 ```bash
-docker run -d --name egeria-scratch-roundtrip --label purpose=roundtrip-probe \
-  --add-host host.docker.internal:127.0.0.1 -p 127.0.0.1:19443:7443 \
-  -v <scratch>/data:/deployments/data -v <scratch>/application.properties:/deployments/application.properties \
-  -e JAVA_OPTS_APPEND="-Xmx3g" odpi/egeria-platform@sha256:757a5df0db06f526cd92565210eed55ab60adc8e7ab6536a402f33efafc7ea9a
+python scripts/dr_egeria_roundtrip_probe/scratch.py up [--digest sha256:...]   # default: the laz pin
+python scripts/dr_egeria_roundtrip_probe/scratch.py status                     # also laz's StartedAt, read-only
+python scripts/dr_egeria_roundtrip_probe/scratch.py down
 ```
 
-The user is one of the image's demo users (default `garygeeke`). Its password is read from the scratch
+`up` pulls `odpi/egeria-platform` by digest, copies the image's `/deployments/data` and
+`application.properties` into `~/.re-gate/roundtrip-probe/scratch-<UTC>/`, and applies the edits:
+
+1. `view-server.config`: every `"omagserverName":"active-metadata-store"` → `"simple-metadata-store"`, and the
+   Kafka audit-log destination removed.
+2. `application.properties`: `startup.server.list=simple-metadata-store,view-server`.
+3. `application.properties`: the image's placeholder JSON typo fixed (`YAMLSecretsStoreProvider".\` → `",\`);
+   without it no server starts.
+4. `kafkaEndpoint` → `kafka-disabled.invalid:9092`, `egeriaEndpoint` → `https://localhost:7443`.
+
+Then the refusal check, then `docker run` on `127.0.0.1:19443` with the label, and a wait until both
+servers have started. The repository is in memory: never restart it mid-run. `down` removes the
+container and the scratch configuration (results are kept) and confirms no labelled container is left
+and port 19443 is free. The user is the image's demo `garygeeke`; its password is read from the
 container's own secrets and never printed.
 
-## Running
+## Running the probe
 
 ```bash
 uv run -p 3.13 python scripts/dr_egeria_roundtrip_probe/probe.py --smoke      # one glossary, read back
 uv run -p 3.13 python scripts/dr_egeria_roundtrip_probe/probe.py --run        # every Create command
-uv run -p 3.13 python scripts/dr_egeria_roundtrip_probe/report.py ~/.re-gate/roundtrip-probe/RESULTS-<UTC>.json \
-    [--extra-header triage.md]
+uv run -p 3.13 python scripts/dr_egeria_roundtrip_probe/report.py ~/.re-gate/roundtrip-probe/RESULTS-<UTC>.json
 ```
 
-Outputs, under `~/.re-gate/roundtrip-probe/`: `RESULTS-<UTC>.json` and `.md`, and `run-<UTC>/` with the
+The probe tests the pyegeria installed in the interpreter that runs it (specs included), so to probe
+another checkout run it with that checkout's environment, e.g. `uv run --project <checkout> python …/probe.py`.
+Outputs, under `~/.re-gate/roundtrip-probe/`: `RESULTS-<UTC>.json` / `.md`, and `run-<UTC>/` with the
 generated document per family, each `dr_egeria --process --advanced --debug` log, and the processed output.
 
-## Verdicts
+### Verdicts
 
-`MATCH`, `DROPPED` (sent, absent on read-back), `CHANGED` (present, different), `DEFAULTED` (equals the default,
-not what was sent), `NOT FOUND` (not at the expected place but seen elsewhere in the element: a mapping-table
-gap), `SKIPPED (relationship – phase 2)`, `SKIPPED (control)`, `SKIPPED (not a phase-1 style)`,
-`REJECTED (breaks the create)` (attributes whose probe value makes Egeria reject the whole create; listed with
-the cause in `REJECTED` in `probe.py`), `CREATE-FAILED`, `AUTH`, `UNRESOLVED`. Each DROPPED/CHANGED/DEFAULTED row says whether the value was in the
-request body Dr.Egeria sent under the expected key (Egeria-side), not at all (pyegeria-side), or only under
-another key (`pyegeria-side?`: check the key against the Java bean), from the `--debug` log.
+`MATCH`; `DROPPED (not stored)` (sent, absent on read-back and absent in the raw store);
+`NOT RETURNED (stored)` (sent, absent on read-back, present in the raw store: an Egeria read gap);
+`DROPPED` (absent on read-back, raw store not checkable: relationships and header fields);
+`CHANGED`; `DEFAULTED`; `NOT FOUND` (stored under another key: a spec metadata gap);
+`SKIPPED (relationship – phase 2)`, `SKIPPED (control)`, `SKIPPED (no status property)`, …;
+`REJECTED (breaks the create)` (an attribute whose probe value makes Egeria reject the whole create,
+listed with its cause in `REJECTED` in `probe.py`); `CREATE-FAILED`; `AUTH`; `UNRESOLVED`.
 
-Every run uses `RTP::<UTC>::<Command>` names, so a re-run on the same platform creates rather than updates.
+- **Stored (raw)** column: for every non-MATCH row the entity is read through repository-services on the
+  scratch metadata store (`POST …/simple-metadata-store/open-metadata/repository-services/users/{u}/instances/entity/{guid}`),
+  which returns the stored instance properties and effective times, bypassing the bean converters.
+- **Side** (DROPPED / NOT RETURNED / CHANGED / DEFAULTED): from the `--debug` request bodies, key-aware —
+  Egeria-side (in the body under the expected key), pyegeria-side (in no body), or `pyegeria-side?`
+  (sent only under another key).
+- **Status** is read from the type's own status field (`contentStatus` / `activityStatus` /
+  `deploymentStatus`, from `element_status_fields`), on a second, Status-only element per command (the
+  command's own Content/Activity/Deployment Status attribute would otherwise win the field).
+- Every run uses `RTP::<UTC>::<Command>` names, so a re-run on the same platform creates, not updates.
 
-## Teardown
+## The release gate
 
 ```bash
-docker rm -f egeria-scratch-roundtrip
-rm -rf <scratch>/data
-docker ps -a --filter label=purpose=roundtrip-probe     # empty
-lsof -iTCP:19443 -sTCP:LISTEN                           # nothing
+uv run -p 3.13 python scripts/dr_egeria_roundtrip_probe/gate.py              # up, probe, compare, down
+uv run -p 3.13 python scripts/dr_egeria_roundtrip_probe/gate.py --results RESULTS-<UTC>.json   # compare only
+uv run -p 3.13 python scripts/dr_egeria_roundtrip_probe/probe.py --run --gate                  # platform already up
 ```
 
-The repository is in memory, so nothing persists.
+The gate **fails** (exit 1) on: a row that was MATCH and now isn't; a new REJECTED, CREATE-FAILED or
+UNRESOLVED; a command that has disappeared. **Improvements don't fail**: they print "update the baseline".
+Rows in `known-gaps.json` never fail (an entry with a `verdict` covers that verdict only); when one
+becomes MATCH the gate prints "remove from known gaps". No baseline for the platform's digest → exit 2.
+
+- **Updating the baseline** (a release that fixes rows): `gate.py --rebaseline` (or `probe.py --run
+  --rebaseline`). The rewritten file lists each changed row under `changes` with `"<one-line reason>"`;
+  fill in every reason and commit the baseline in the release PR.
+- **A new Egeria digest** (the laz pin moves): `gate.py --digest sha256:<new> --rebaseline` writes
+  `baseline/<new>.json`; the PR shows the diff between the old and new digest baselines, so Egeria-side
+  changes are visible.
+- **Where it runs:** GitHub Actions (`.github/workflows/probe-gate.yml`: `workflow_dispatch`, and PRs
+  labelled `release` or targeting `release/*`; the results are uploaded as artifacts), or locally with
+  `gate.py` when Actions is unavailable (attach the results to the release PR).
+- **Release procedure** (`docs/RELEASING.md`): "probe gate green, or its failure explained in the PR"
+  comes after the 3.13 micro-tests and before tagging.
+
+Phase 2 (relationship attributes, real zones) is not covered yet.

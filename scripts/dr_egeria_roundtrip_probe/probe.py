@@ -40,8 +40,13 @@ SCRATCH_LABEL = "purpose=roundtrip-probe"
 REFUSED_PORTS = {9443, 8443, 7443}
 IMAGE = "odpi/egeria-platform@sha256:757a5df0db06f526cd92565210eed55ab60adc8e7ab6536a402f33efafc7ea9a"
 VIEW_SERVER = "view-server"
-REPO = Path(__file__).resolve().parents[2]
-COMPACT = REPO / "md_processing" / "data" / "compact_commands"
+
+
+def compact_dir() -> Path:
+    """The compact command specs of the md_processing actually installed in this interpreter (so the probe
+    can be run from one checkout against another checkout's code)."""
+    import md_processing
+    return Path(md_processing.__file__).resolve().parent / "data" / "compact_commands"
 
 PHASE1_STYLES = {"Simple", "Simple List", "Simple Int", "Simple Float", "Line List", "Bool", "Valid Value",
                  "Enum", "Dictionary", "Named DICT"}
@@ -97,7 +102,6 @@ LOCATIONS = {
     "Retention Classification": ("cls:Retention", "a governance classification, stored as a basis"),
     "Security Tags": ("cls:SecurityTags", "the SecurityTags classification in the header"),
     "Policy Management Point": ("cls:PolicyManagementPoint", "a classification in the header"),
-    "Status": ("header.status", "element status is a header field"),
     "Search Keywords": ("rel.searchKeywords.keyword", "keywords are SearchKeyword elements linked to the element"),
 }
 
@@ -128,6 +132,21 @@ def guard(url: str) -> None:
                                     context=ctx, timeout=10).read().decode()
     if "Egeria OMAG Server Platform" not in origin:
         raise Refused(f"REFUSED: {url} origin is {origin!r}")
+
+
+def scratch_image() -> str:
+    """The image (with digest) the scratch container runs."""
+    proc = subprocess.run(["docker", "inspect", "-f", "{{.Config.Image}}", SCRATCH_CONTAINER],
+                          capture_output=True, text=True)
+    return proc.stdout.strip() or IMAGE
+
+
+def laz_started_at():
+    """StartedAt of laz's Egeria container when this host has one: a read-only inspect, recorded so a
+    run can show it never touched laz."""
+    proc = subprocess.run(["docker", "inspect", "-f", "{{.State.StartedAt}}", "quickstart-egeria-main"],
+                          capture_output=True, text=True)
+    return proc.stdout.strip() if proc.returncode == 0 else None
 
 
 def scratch_password(user: str) -> str:
@@ -185,7 +204,7 @@ def create_commands():
     from md_processing.md_processing_utils.md_processing_constants import get_command_spec, load_commands
     load_commands()
     out = []
-    for f in sorted(COMPACT.glob("*.json")):
+    for f in sorted(compact_dir().glob("*.json")):
         data = json.loads(f.read_text())
         family = data.get("family") or f.stem
         for key, c in (data.get("commands") or {}).items():
@@ -219,8 +238,6 @@ def plan(attr, cslug: str):
         return "SKIPPED (not a phase-1 style)", None, f"style {style}"
     base = f"RTP {cslug} {slug(name)}"
     default = attr.get("default_value")
-    if name == "Status":  # the element header status: a real, non-default ElementStatus value
-        return "valid", "DRAFT", "DRAFT"
     if name == "Effective From":
         return "date", "2020-01-02", "2020-01-02"
     if name == "Effective To" or is_date(attr):
@@ -250,6 +267,34 @@ def plan(attr, cslug: str):
     return "SKIPPED (not a phase-1 style)", None, f"style {style}"
 
 
+#: A value valid for exactly one status enum, so where it lands says which field Dr.Egeria chose.
+STATUS_PROBE_VALUES = {"contentStatus": "DRAFT", "activityStatus": "IN_PROGRESS",
+                       "deploymentStatus": "UNDER_DEVELOPMENT"}
+
+
+def status_plan(spec: dict, attribute_names: set):
+    """Where Dr.Egeria puts the generic `Status` for this command's type, and the value to send.
+
+    Dr.Egeria maps `Status` onto the type's own status field (md_processing_utils.element_status,
+    driven by element_status_fields.STATUS_FIELDS_BY_PROPERTIES_CLASS); the header element status
+    can't be set on create. The command's own Content/Activity/Deployment Status attributes would win
+    the field, so Status is tested on a second, Status-only element (see build_family_doc). Returns
+    (kind, md, expected, location) or a SKIPPED row.
+    """
+    from md_processing.md_processing_utils.element_status import EXPLICIT_STATUS_ATTRIBUTES, _PREFERENCE
+    from md_processing.md_processing_utils.element_status_fields import STATUS_FIELDS_BY_PROPERTIES_CLASS
+    cls = f"{spec.get('OM_TYPE') or ''}Properties"
+    fields = STATUS_FIELDS_BY_PROPERTIES_CLASS.get(cls)
+    note = ""
+    if fields is None:  # a type the table doesn't know: Dr.Egeria's fallback is contentStatus
+        fields, note = ("contentStatus",), f" ({cls} not in the status table; Dr.Egeria falls back to contentStatus)"
+    if not fields:
+        return "SKIPPED (no status property)", None, f"{cls} has no status property", None
+    free = [f for f in _PREFERENCE if f in fields]
+    value = STATUS_PROBE_VALUES[free[0]]
+    return "valid", value, value, f"properties.{free[0]}" + note
+
+
 def build_family_doc(family: str, commands, out_dir: Path, tag: str = ""):
     """The family's Dr.Egeria document and its per-command plan."""
     lines, plans = [f"# RTP round-trip probe: {family}", ""], []
@@ -257,20 +302,48 @@ def build_family_doc(family: str, commands, out_dir: Path, tag: str = ""):
         cslug = slug(command)
         qn = f"RTP::{tag}::{cslug}" if tag else f"RTP::{cslug}"
         display = f"RTP {cslug} DisplayName {tag}".rstrip()
-        rows = []
-        lines += ["___", "", f"## {command}", "", "### Display Name", display, "", "### Qualified Name", qn, ""]
+        rows, block, status_row = [], [], None
         for attr in spec.get("Attributes", []):
             if attr["name"] in ("Qualified Name",):
+                continue
+            if attr["name"] == "Status" and attr["name"] not in CONTROL_ATTRIBUTES:
+                planned = {a["name"] for a in spec.get("Attributes", []) if plan(a, cslug)[1] is not None}
+                kind, md, expected, location = status_plan(spec, planned)
+                status_row = ({"attribute": "Status", "style": attr.get("style"), "kind": kind,
+                               "sent": expected if md is not None else None,
+                               "reason": expected if md is None else None, "property": None,
+                               "variable": attr.get("variable_name"), "default": attr.get("default_value"),
+                               "location": location}, md)
                 continue
             kind, md, expected = plan(attr, cslug)
             rows.append({"attribute": attr["name"], "style": attr.get("style"), "kind": kind,
                          "sent": expected if md is not None else None, "reason": expected if md is None else None,
                          "property": attr.get("property_name") or None, "variable": attr.get("variable_name"),
-                         "default": attr.get("default_value")})
+                         "default": attr.get("default_value"), "location": None})
             if md is not None:
-                lines += [f"### {attr['name']}", md, ""]
+                block += [f"### {attr['name']}", md, ""]
+        lines += ["___", "", f"## {command}", "", "### Display Name", display, "", "### Qualified Name", qn, ""] + block
         plans.append({"family": family, "command": command, "qualified_name": qn, "display_name": display,
                       "rows": rows})
+        if status_row:
+            row, md = status_row
+            if md is None:
+                plans[-1]["rows"].append(row)
+            else:
+                # Status alone (no Content/Activity/Deployment Status, which would win the field): its own element
+                from md_processing.md_processing_utils.element_status import EXPLICIT_STATUS_ATTRIBUTES
+                explicit = {f"### {a}" for a in EXPLICIT_STATUS_ATTRIBUTES}
+                kept, skip = [], False
+                for line in block:
+                    if line.startswith("### "):
+                        skip = line in explicit
+                    if not skip:
+                        kept.append(line)
+                sqn, sdisplay = f"{qn}::Status", f"RTP {cslug} StatusProbe {tag}".rstrip()
+                lines += ["___", "", f"## {command}", "", "### Display Name", sdisplay, "", "### Qualified Name",
+                          sqn, ""] + kept + ["### Status", md, ""]
+                plans.append({"family": family, "command": command, "qualified_name": sqn,
+                              "display_name": sdisplay, "rows": [row], "status_probe": True})
     lines += ["___", ""]
     doc = out_dir / f"{slug(family)}.md"
     doc.write_text("\n".join(lines), encoding="utf-8")
@@ -362,7 +435,10 @@ def norm(kind, value):
 
 def verdict(row, element):
     kind, sent = row["kind"], row["sent"]
-    if row["attribute"] in LOCATIONS:
+    if row.get("location"):
+        path = row["location"].split(" ")[0]
+        got = dig(element, path)
+    elif row["attribute"] in LOCATIONS:
         path = LOCATIONS[row["attribute"]][0]
         got = dig(element, path)
     else:
@@ -386,6 +462,82 @@ def verdict(row, element):
     if row["default"] not in (None, "") and norm(kind, got) == norm(kind, row["default"]):
         return "DEFAULTED", got, path
     return "CHANGED", got, path
+
+
+# ── Raw store (repository-services: what Egeria stored, bypassing the bean converters) ──
+
+def raw_value(value: dict):
+    """A repository-services InstancePropertyValue as plain Python."""
+    if not isinstance(value, dict):
+        return value
+    cat = value.get("instancePropertyCategory")
+    if cat == "PRIMITIVE":
+        return value.get("primitiveValue")
+    if cat == "ENUM":
+        return value.get("symbolicName")
+    if cat == "ARRAY":
+        items = ((value.get("arrayValues") or {}).get("instanceProperties") or {})
+        return [raw_value(items[k]) for k in sorted(items, key=lambda k: int(k) if str(k).isdigit() else k)]
+    if cat in ("MAP", "STRUCT"):
+        inner = value.get("mapValues") or value.get("attributes") or {}
+        return {k: raw_value(v) for k, v in (inner.get("instanceProperties") or {}).items()}
+    return value.get("primitiveValue", value)
+
+
+def raw_properties(instance_properties: dict | None) -> dict:
+    return {k: raw_value(v) for k, v in ((instance_properties or {}).get("instanceProperties") or {}).items()}
+
+
+def parse_raw_entity(response: dict) -> dict | None:
+    """{properties, effectiveFromTime, effectiveToTime, classifications{name: properties}} from an
+    EntityDetailResponse, or None when it carries no entity."""
+    entity = (response or {}).get("entity")
+    if not isinstance(entity, dict):
+        return None
+    props = entity.get("properties") or {}
+    return {"properties": raw_properties(props),
+            "effectiveFromTime": props.get("effectiveFromTime"), "effectiveToTime": props.get("effectiveToTime"),
+            "classifications": {c.get("name"): raw_properties(c.get("properties"))
+                                for c in entity.get("classifications") or []}}
+
+
+def fetch_raw_entity(url: str, user: str, headers: dict, guid: str):
+    """The stored entity from the scratch metadata store (POST with a GetRequest body; GET is 405)."""
+    import httpx
+    endpoint = (f"{url}/servers/simple-metadata-store/open-metadata/repository-services/users/{user}"
+                f"/instances/entity/{guid}")
+    try:
+        r = httpx.post(endpoint, json={"class": "GetRequest"}, headers={"Authorization": headers["Authorization"]},
+                       verify=False, timeout=30)
+        data = r.json()
+    except Exception as exc:  # noqa: BLE001
+        return None, f"{type(exc).__name__}: {exc}"[:120]
+    parsed = parse_raw_entity(data)
+    return parsed, (None if parsed else f"no entity (HTTP {r.status_code}: {data.get('exceptionErrorMessage', '')[:80]})")
+
+
+def stored_raw(row: dict, path: str, raw: dict | None, why: str | None):
+    """('yes', value) / ('no', None) / ('not checked', reason) for one attribute in the raw entity."""
+    if raw is None:
+        return "not checked", why or "no raw entity"
+    if row["attribute"] in ("Effective From", "Effective To"):
+        value = raw["effectiveFromTime" if row["attribute"] == "Effective From" else "effectiveToTime"]
+        return ("yes", value) if value not in (None, "") else ("no", None)
+    if path.startswith("cls:"):
+        name = path[4:]
+        return ("yes", raw["classifications"][name]) if name in raw["classifications"] else ("no", None)
+    if path.startswith("rel.") or path.startswith("header."):
+        return "not checked", "a relationship or header field, not an entity property"
+    key = path.split(".", 1)[1] if path.startswith("properties.") else path
+    value = raw["properties"].get(key)
+    return ("yes", value) if value not in (None, "", [], {}) else ("no", None)
+
+
+def split_verdict(verdict_: str, stored: str) -> str:
+    """DROPPED splits on the raw store: not stored at all, or stored and not returned by the read."""
+    if verdict_ == "DROPPED":
+        return {"yes": "NOT RETURNED (stored)", "no": "DROPPED (not stored)"}.get(stored, "DROPPED")
+    return verdict_
 
 
 # ── Running ──
@@ -423,7 +575,7 @@ def bodies_for(log_text: str, qn: str, display: str = ""):
     return out
 
 
-def summary_row(log_text: str, command: str, display: str):
+def summary_row(log_text: str, command: str, display: str, by_command: bool = True):
     """(status, message, guid) from Dr.Egeria's summary table row for this command, or None."""
     for line in log_text.splitlines():
         cells = [c.strip() for c in line.split("│")]
@@ -431,6 +583,8 @@ def summary_row(log_text: str, command: str, display: str):
             msg = cells[-2] if cells[-1] == "" else cells[-1]
             guid = re.search(r"GUID: ([A-Za-z]*-?[0-9a-f]{8}-[0-9a-f-]{27})", msg)
             return cells[3], msg, guid.group(1) if guid else None
+    if not by_command:
+        return None
     for line in log_text.splitlines():  # some processors show their own name (e.g. Kafka Server Name), not ours
         cells = [c.strip() for c in line.split("│")]
         if len(cells) > 6 and cells[1] == command and cells[3] in ("SUCCESS", "FAILURE"):
@@ -451,6 +605,8 @@ def side(row, bodies):
         present = re.search(rf'"class": "{loc[4:]}(Classification)?Properties"', text) is not None
         return "Egeria-side (in the request body)" if present else "pyegeria-side (not in the request body)"
     key = row["property"] or camel(row["variable"])
+    if (row.get("location") or "").startswith("properties."):
+        key = row["location"].split(" ")[0].split(".", 1)[1]
     sent = row["sent"]
     probe = sent[0] if isinstance(sent, list) else (next(iter(sent.values())) if isinstance(sent, dict) else sent)
     hits = []
@@ -489,6 +645,10 @@ def main(argv=None):
     ap.add_argument("--smoke", action="store_true", help="create one glossary and read it back")
     ap.add_argument("--run", action="store_true", help="the full phase-1 run")
     ap.add_argument("--families", default="", help="comma-separated family filter (default: all)")
+    ap.add_argument("--gate", action="store_true", help="after --run, compare with the baseline (see gate.py)")
+    ap.add_argument("--baseline", help="baseline file (default: baseline/<egeria digest>.json)")
+    ap.add_argument("--known-gaps", help="known gaps file (default: known-gaps.json beside this script)")
+    ap.add_argument("--rebaseline", action="store_true", help="after --run, write the baseline from this run")
     args = ap.parse_args(argv)
 
     guard(args.url)  # before anything else touches the platform
@@ -520,6 +680,7 @@ def main(argv=None):
     if not args.run:
         ap.error("choose --smoke or --run")
     start = dt.datetime.now(dt.timezone.utc)
+    laz_before = laz_started_at()
     commands = create_commands()
     wanted = {f.strip() for f in args.families.split(",") if f.strip()}
     results, families = [], {}
@@ -535,7 +696,7 @@ def main(argv=None):
         doc, plans = build_family_doc(fam, cmds, run_dir / "docs", stamp)
         log_text = run_dr_egeria(doc, env, args.url, args.user, run_dir / f"{slug(fam)}.log")
         for p in plans:
-            row = summary_row(log_text, p["command"], p["display_name"])
+            row = summary_row(log_text, p["command"], p["display_name"], by_command=not p.get("status_probe"))
             try:
                 el = client.get_element_by_unique_name(p["qualified_name"], output_format="JSON")
                 if not isinstance(el, dict) and row and row[2]:
@@ -552,11 +713,14 @@ def main(argv=None):
                 err = err or str(el)[:200]
                 failed = "AUTH" if re.search(r"not authori[sz]ed|\b403\b|-403-", err, re.I) else "CREATE-FAILED"
                 skipped = collections.Counter(r["kind"] for r in p["rows"] if r["kind"].startswith(("SKIPPED", "REJECTED")))
-                results.append({"family": fam, "command": p["command"], "attribute": "", "style": "", "sent": None,
+                results.append({"family": fam, "command": p["command"],
+                                "attribute": "Status" if p.get("status_probe") else "", "style": "", "sent": None,
                                 "read": None, "verdict": failed, "note": err[:300],
                                 "skipped": dict(skipped)})
                 continue
             bodies = bodies_for(log_text, p["qualified_name"], p["display_name"])
+            raw, raw_why, guid = None, None, (el.get("elementHeader") or {}).get("guid")
+            fetched = False
             for row in p["rows"]:
                 if row["kind"].startswith(("SKIPPED", "REJECTED")):
                     results.append({"family": fam, "command": p["command"], "attribute": row["attribute"],
@@ -566,15 +730,35 @@ def main(argv=None):
                 v, got, note = verdict(row, el)
                 r = {"family": fam, "command": p["command"], "attribute": row["attribute"], "style": row["style"],
                      "sent": row["sent"], "read": got, "verdict": v, "note": note}
-                if v in ("DROPPED", "CHANGED", "DEFAULTED"):
+                if v != "MATCH":
+                    if not fetched:
+                        raw, raw_why = fetch_raw_entity(args.url, args.user, client.headers, guid) if guid else (
+                            None, "no GUID")
+                        fetched = True
+                    path = note.split(" ")[-1] if v == "DROPPED" else note.split(" ")[0]
+                    if v == "NOT FOUND":
+                        path = note.split(";")[0].replace("not at ", "")
+                    state, value = stored_raw(row, path, raw, raw_why)
+                    r["stored"] = f"{state} {json.dumps(value, default=str)[:120]}" if state == "yes" else (
+                        state if state == "no" else f"not checked ({value})")
+                    r["verdict"] = v = split_verdict(v, state)
+                if v.startswith(("DROPPED", "NOT RETURNED", "CHANGED", "DEFAULTED")):
                     r["side"] = side(row, bodies)
                 results.append(r)
     end = dt.datetime.now(dt.timezone.utc)
-    meta = {"image": IMAGE, "option": "A (simple-metadata-store + view-server)", "pyegeria": md.version("pyegeria"),
+    meta = {"image": scratch_image(), "laz_started_at_before": laz_before, "laz_started_at_after": laz_started_at(),
+            "option": "A (simple-metadata-store + view-server)", "pyegeria": md.version("pyegeria"),
             "user": args.user, "start": start.isoformat(timespec="seconds"), "end": end.isoformat(timespec="seconds"),
             "commands": sum(len(c) for c in families.values()), "run_dir": str(run_dir)}
-    (out / f"RESULTS-{stamp}.json").write_text(json.dumps({"meta": meta, "rows": results}, indent=1, default=str))
-    print(f"results: {out / f'RESULTS-{stamp}.json'} ({len(results)} rows)")
+    results_file = out / f"RESULTS-{stamp}.json"
+    results_file.write_text(json.dumps({"meta": meta, "rows": results}, indent=1, default=str))
+    print(f"results: {results_file} ({len(results)} rows)")
+    if args.gate or args.rebaseline:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import gate
+        return gate.gate_results(results_file, Path(args.baseline).expanduser() if args.baseline else None,
+                                 Path(args.known_gaps).expanduser() if args.known_gaps else gate.KNOWN_GAPS,
+                                 args.rebaseline)
     return 0
 
 

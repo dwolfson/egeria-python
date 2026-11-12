@@ -11,7 +11,7 @@ import collections
 import json
 from pathlib import Path
 
-FIRST = ("DROPPED", "CHANGED", "DEFAULTED")
+FIRST = ("DROPPED", "NOT RETURNED", "CHANGED", "DEFAULTED")
 
 
 def cell(value) -> str:
@@ -28,25 +28,31 @@ def render(data: dict, extra: str = "") -> str:
              f"- Image: `{meta['image']}`", f"- Server option: {meta['option']}",
              f"- pyegeria: {meta['pyegeria']}", f"- User: {meta['user']}",
              f"- Start: {meta['start']}  End: {meta['end']}", f"- Create commands: {meta['commands']}",
+             f"- laz `quickstart-egeria-main` StartedAt before/after: {meta.get('laz_started_at_before')} / "
+             f"{meta.get('laz_started_at_after')}",
              f"- Run folder (generated docs, dr_egeria logs): `{meta['run_dir']}`", ""]
     if extra:
         lines += [extra.rstrip(), ""]
     lines += ["## Counts per verdict", "", "| Verdict | Rows |", "|---|---|"]
     lines += [f"| {v} | {n} |" for v, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
-    first = [r for r in rows if r["verdict"] in FIRST]
+    first = [r for r in rows if r["verdict"].startswith(FIRST)]
     sides = collections.Counter(r.get("side", "?").split(" (")[0] for r in first)
     lines += ["", f"## DROPPED, CHANGED and DEFAULTED ({len(first)} rows; " +
               ", ".join(f"{k} {v}" for k, v in sorted(sides.items())) + ")", "",
-              "| Family | Command | Attribute | Style | Sent | Read back | Verdict | Side | Note |",
-              "|---|---|---|---|---|---|---|---|---|"]
-    for r in sorted(first, key=lambda r: (FIRST.index(r["verdict"]), r["family"], r["command"], r["attribute"])):
+              "| Family | Command | Attribute | Style | Sent | Read back | Stored (raw) | Verdict | Side | Note |",
+              "|---|---|---|---|---|---|---|---|---|---|"]
+    order = lambda v: next(i for i, f in enumerate(FIRST) if v.startswith(f))  # noqa: E731
+    for r in sorted(first, key=lambda r: (order(r["verdict"]), r["family"], r["command"], r["attribute"])):
         lines.append(f"| {cell(r['family'])} | {cell(r['command'])} | {cell(r['attribute'])} | {cell(r['style'])} | "
-                     f"{cell(r['sent'])} | {cell(r['read'])} | {r['verdict']} | {cell(r.get('side'))} | {cell(r['note'])} |")
-    lines += ["", "## Full table", "", "| Family | Command | Attribute | Style | Sent | Read back | Verdict | Note |",
-              "|---|---|---|---|---|---|---|---|"]
+                     f"{cell(r['sent'])} | {cell(r['read'])} | {cell(r.get('stored'))} | {r['verdict']} | "
+                     f"{cell(r.get('side'))} | {cell(r['note'])} |")
+    lines += ["", "## Full table", "",
+              "| Family | Command | Attribute | Style | Sent | Read back | Stored (raw) | Verdict | Note |",
+              "|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         lines.append(f"| {cell(r['family'])} | {cell(r['command'])} | {cell(r['attribute'])} | {cell(r['style'])} | "
-                     f"{cell(r['sent'])} | {cell(r['read'])} | {r['verdict']} | {cell(r['note'])} |")
+                     f"{cell(r['sent'])} | {cell(r['read'])} | {cell(r.get('stored'))} | {r['verdict']} | "
+                     f"{cell(r['note'])} |")
     return "\n".join(lines) + "\n"
 
 

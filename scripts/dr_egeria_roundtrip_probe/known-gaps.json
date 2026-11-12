@@ -1,0 +1,74 @@
+{
+ "about": "Rows accepted as not fixable in pyegeria. Keys are 'command|attribute', or '*|attribute' / 'command|*'. They never fail the gate; when one comes back MATCH the gate says 'remove from known gaps'. Each entry needs a reason and a reference. An entry with a 'verdict' covers that verdict only: the same row failing another way is not hidden.",
+ "gaps": {
+  "Create Regulation|Regulators": {
+   "reason": "Egeria WRITE gap: the value is in the request body and not stored (builder never copies regulators)",
+   "ref": "EGERIA-ISSUE-REGULATORS-2026-11-12.md",
+   "verdict": "DROPPED (not stored)"
+  },
+  "*|Effective From": {
+   "reason": "Egeria READ gap: stored (raw effectiveFromTime), not returned by the entity bean converters",
+   "ref": "EGERIA-ISSUE-REGULATORS-2026-11-12.md addendum (2): entity effective dates not returned",
+   "verdict": "NOT RETURNED (stored)"
+  },
+  "*|Effective To": {
+   "reason": "Egeria READ gap: stored (raw effectiveToTime), not returned by the entity bean converters",
+   "ref": "EGERIA-ISSUE-REGULATORS-2026-11-12.md addendum (2): entity effective dates not returned",
+   "verdict": "NOT RETURNED (stored)"
+  },
+  "*|Project Scope": {
+   "reason": "owner decision pending: Egeria's Project has no scope property (PROJECT-ATTRIBUTES-MAPPING-2026-11-12.md section 3)",
+   "ref": "BRIEF-PYEGERIA-FB-UNAPPLIED-ATTRIBUTES-2026-11-12.md group 7"
+  },
+  "Create Cited Document|Authors": {
+   "reason": "Egeria READ bug: stored, then removed twice by OpenMetadataPropertyConverterBase (removeAuthors in the ExternalReference/DesignModel/DesignModelElement branch and again in the AuthoredReferenceable tail)",
+   "ref": "EGERIA-ISSUE-REGULATORS-2026-11-12.md addendum (1): Authors double-remove",
+   "verdict": "NOT RETURNED (stored)"
+  },
+  "Create Concept Model|Authors": {
+   "reason": "Egeria READ bug: stored, then removed twice by OpenMetadataPropertyConverterBase (removeAuthors in the ExternalReference/DesignModel/DesignModelElement branch and again in the AuthoredReferenceable tail)",
+   "ref": "EGERIA-ISSUE-REGULATORS-2026-11-12.md addendum (1): Authors double-remove",
+   "verdict": "NOT RETURNED (stored)"
+  },
+  "Create External Data Source|Authors": {
+   "reason": "Egeria READ bug: stored, then removed twice by OpenMetadataPropertyConverterBase (removeAuthors in the ExternalReference/DesignModel/DesignModelElement branch and again in the AuthoredReferenceable tail)",
+   "ref": "EGERIA-ISSUE-REGULATORS-2026-11-12.md addendum (1): Authors double-remove",
+   "verdict": "NOT RETURNED (stored)"
+  },
+  "Create External Model Source|Authors": {
+   "reason": "Egeria READ bug: stored, then removed twice by OpenMetadataPropertyConverterBase (removeAuthors in the ExternalReference/DesignModel/DesignModelElement branch and again in the AuthoredReferenceable tail)",
+   "ref": "EGERIA-ISSUE-REGULATORS-2026-11-12.md addendum (1): Authors double-remove",
+   "verdict": "NOT RETURNED (stored)"
+  },
+  "Create External Reference|Authors": {
+   "reason": "Egeria READ bug: stored, then removed twice by OpenMetadataPropertyConverterBase (removeAuthors in the ExternalReference/DesignModel/DesignModelElement branch and again in the AuthoredReferenceable tail)",
+   "ref": "EGERIA-ISSUE-REGULATORS-2026-11-12.md addendum (1): Authors double-remove",
+   "verdict": "NOT RETURNED (stored)"
+  },
+  "Create External Source Code|Authors": {
+   "reason": "Egeria READ bug: stored, then removed twice by OpenMetadataPropertyConverterBase (removeAuthors in the ExternalReference/DesignModel/DesignModelElement branch and again in the AuthoredReferenceable tail)",
+   "ref": "EGERIA-ISSUE-REGULATORS-2026-11-12.md addendum (1): Authors double-remove",
+   "verdict": "NOT RETURNED (stored)"
+  },
+  "Create External Standard|Authors": {
+   "reason": "Egeria READ bug: stored, then removed twice by OpenMetadataPropertyConverterBase (removeAuthors in the ExternalReference/DesignModel/DesignModelElement branch and again in the AuthoredReferenceable tail)",
+   "ref": "EGERIA-ISSUE-REGULATORS-2026-11-12.md addendum (1): Authors double-remove",
+   "verdict": "NOT RETURNED (stored)"
+  },
+  "Create Related Media|Authors": {
+   "reason": "Egeria READ bug: stored, then removed twice by OpenMetadataPropertyConverterBase (removeAuthors in the ExternalReference/DesignModel/DesignModelElement branch and again in the AuthoredReferenceable tail)",
+   "ref": "EGERIA-ISSUE-REGULATORS-2026-11-12.md addendum (1): Authors double-remove",
+   "verdict": "NOT RETURNED (stored)"
+  },
+  "Create Solution Blueprint|Authors": {
+   "reason": "Egeria READ bug: stored, then removed twice by OpenMetadataPropertyConverterBase (removeAuthors in the ExternalReference/DesignModel/DesignModelElement branch and again in the AuthoredReferenceable tail)",
+   "ref": "EGERIA-ISSUE-REGULATORS-2026-11-12.md addendum (1): Authors double-remove",
+   "verdict": "NOT RETURNED (stored)"
+  },
+  "Create Solution Component|Authors": {
+   "reason": "Egeria READ bug: stored, then removed twice by OpenMetadataPropertyConverterBase (removeAuthors in the ExternalReference/DesignModel/DesignModelElement branch and again in the AuthoredReferenceable tail)",
+   "ref": "EGERIA-ISSUE-REGULATORS-2026-11-12.md addendum (1): Authors double-remove",
+   "verdict": "NOT RETURNED (stored)"
+  }
+ }
+}
