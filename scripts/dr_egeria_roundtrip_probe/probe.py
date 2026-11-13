@@ -38,7 +38,7 @@ SCRATCH_PORT = 19443
 SCRATCH_CONTAINER = "egeria-scratch-roundtrip"
 SCRATCH_LABEL = "purpose=roundtrip-probe"
 REFUSED_PORTS = {9443, 8443, 7443}
-IMAGE = "odpi/egeria-platform@sha256:757a5df0db06f526cd92565210eed55ab60adc8e7ab6536a402f33efafc7ea9a"
+IMAGE = "odpi/egeria-platform@sha256:002a3ef17b269775797fd9bf590a503b098141094c83839443b79753c44f4060"
 VIEW_SERVER = "view-server"
 
 
