@@ -23,6 +23,8 @@ The result says how the read ended, so a caller never shows "nothing" or a total
 - ``capped``: the caller's limits stopped it (``want`` rows collected, or ``max_pages``); there may be more.
 - ``stalled``: a page brought only rows already read (a server ignoring ``startFrom``); stopped so it
   can't loop forever.
+- ``first_page``: one page was read and not paged on (a caller's choice, e.g. a report run whose first
+  page had rows). Set by callers, never by ``page_all``.
 
 Anything but ``confirmed`` is "at least N" (``PageResult.count_text``), never a total.
 
@@ -45,7 +47,19 @@ DEFAULT_MAX_EMPTY_ROWS = 2000   # consecutive filtered positions before giving u
 DEFAULT_MAX_PAGES = 1000        # requests per read, probes included
 
 END_POLICIES = ("trusted", "suspect")
-ENDS = ("confirmed", "not_confirmed", "capped", "stalled")
+ENDS = ("confirmed", "not_confirmed", "capped", "stalled", "first_page")
+
+#: Methods whose null has been shown to mean the end (a filtered page comes back as []), with the evidence.
+#: Everything else pages as "suspect". Add a method only with a raw capture like the one cited.
+TRUSTED_END_METHODS = {
+    # content-status search: [] for 11 filtered pages, then 79 + 7 rows, then null (Architect, laz, 2026-11-13)
+    "find_authored_elements",
+}
+
+
+def end_policy_for(method_name: Optional[str]) -> str:
+    """"trusted" for a method in TRUSTED_END_METHODS, else "suspect"."""
+    return "trusted" if method_name in TRUSTED_END_METHODS else "suspect"
 
 
 @dataclass(frozen=True)
@@ -180,7 +194,8 @@ class _Pager:
                                  positions_read=self.start)
 
 
-def _pager(want, fetch_page_size, end_policy, probe_pages, max_empty_rows, max_pages, key) -> _Pager:
+def _pager(want, fetch_page_size, end_policy, probe_pages, max_empty_rows, max_pages, key,
+           start_from=0) -> _Pager:
     if end_policy not in END_POLICIES:
         raise ValueError(f"end_policy must be one of {END_POLICIES}, not {end_policy!r}")
     for name, value, low in (("fetch_page_size", fetch_page_size, 1), ("probe_pages", probe_pages, 1),
@@ -189,8 +204,10 @@ def _pager(want, fetch_page_size, end_policy, probe_pages, max_empty_rows, max_p
             raise ValueError(f"{name} must be a whole number of at least {low}, not {value!r}")
     if want is not None and (not isinstance(want, int) or isinstance(want, bool) or want < 1):
         raise ValueError(f"want must be None or a whole number of at least 1, not {want!r}")
+    if not isinstance(start_from, int) or isinstance(start_from, bool) or start_from < 0:
+        raise ValueError(f"start_from must be a whole number of at least 0, not {start_from!r}")
     return _Pager(want=want, size=fetch_page_size, policy=end_policy, probe_pages=probe_pages,
-                  max_empty_rows=max_empty_rows, max_pages=max_pages, key=key or default_key)
+                  max_empty_rows=max_empty_rows, max_pages=max_pages, key=key or default_key, start=start_from)
 
 
 @contextmanager
@@ -225,9 +242,11 @@ def _signalled(page: Any, record: dict) -> Any:
 def page_all(fetch: Callable[[int, int], Any], *, want: Optional[int] = None,
              fetch_page_size: int = DEFAULT_FETCH_PAGE_SIZE, end_policy: str = "suspect",
              probe_pages: int = DEFAULT_PROBE_PAGES, max_empty_rows: int = DEFAULT_MAX_EMPTY_ROWS,
-             max_pages: int = DEFAULT_MAX_PAGES, key: Optional[Callable[[Any], Hashable]] = None) -> PageResult:
+             max_pages: int = DEFAULT_MAX_PAGES, key: Optional[Callable[[Any], Hashable]] = None,
+             start_from: int = 0) -> PageResult:
     """Read every row ``fetch(start, size)`` gives (or the first ``want``), paging until the end is known
-    or a limit stops it. See the module docstring for ``end_policy`` and the ``end`` states.
+    or a limit stops it, starting at ``start_from``. See the module docstring for ``end_policy`` and the
+    ``end`` states.
 
     ``key`` gives each row's identity, for dropping rows read twice and for the stall guard. The default
     (``default_key``) is the row's GUID in any of Egeria's shapes, else its JSON content. A caller paging
@@ -236,7 +255,7 @@ def page_all(fetch: Callable[[int, int], Any], *, want: Optional[int] = None,
 
     Each ``fetch`` runs inside ``_end_signal``, so a pyegeria list method that collapses ``[]`` into
     "No elements found" is still read as a filtered page, not as the end."""
-    pager = _pager(want, fetch_page_size, end_policy, probe_pages, max_empty_rows, max_pages, key)
+    pager = _pager(want, fetch_page_size, end_policy, probe_pages, max_empty_rows, max_pages, key, start_from)
     while (req := pager.request()) is not None:
         with _end_signal() as record:
             page = fetch(*req)
@@ -248,9 +267,9 @@ async def async_page_all(fetch: Callable[[int, int], Awaitable[Any]], *, want: O
                          fetch_page_size: int = DEFAULT_FETCH_PAGE_SIZE, end_policy: str = "suspect",
                          probe_pages: int = DEFAULT_PROBE_PAGES, max_empty_rows: int = DEFAULT_MAX_EMPTY_ROWS,
                          max_pages: int = DEFAULT_MAX_PAGES,
-                         key: Optional[Callable[[Any], Hashable]] = None) -> PageResult:
+                         key: Optional[Callable[[Any], Hashable]] = None, start_from: int = 0) -> PageResult:
     """``page_all`` for an async ``fetch`` (same ``key`` and end-signal rules)."""
-    pager = _pager(want, fetch_page_size, end_policy, probe_pages, max_empty_rows, max_pages, key)
+    pager = _pager(want, fetch_page_size, end_policy, probe_pages, max_empty_rows, max_pages, key, start_from)
     while (req := pager.request()) is not None:
         with _end_signal() as record:
             page = await fetch(*req)
