@@ -70,7 +70,7 @@ def _cap(result: Dict[str, Any], max_rows: int, notes: List[str]) -> Dict[str, A
         notes.append(f"capped: the run asked for {max_rows} rows and got {max_rows}; there may be more")
     elif end not in (None, "confirmed"):   # pager step 3: the end wasn't reached, whatever the count
         out["capped"] = True
-        notes.append(f"{len(rows)} rows shown; the read ended {end}, so there may be more")
+        notes.append(f"{len(rows)} rows shown; Egeria didn't confirm there are no more")  # end stays structured
     elif not rows:
         notes.append("ran, and found nothing")
     return out

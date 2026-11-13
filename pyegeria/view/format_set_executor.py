@@ -1262,6 +1262,8 @@ def page_cap_notes(func: Any, call_params: Dict[str, Any], result: Any,
 
 LIST_FORMATS = {"DICT", "JSON", "ALL", "TABLE"}
 NOTHING_IN_FIRST = "nothing in the first {n} positions; can't rule out more"
+#: Pages read after a first page that showed nothing, at most (step-3 read-back, REQUIRED 1).
+AFTER_EMPTY_MAX_PAGES = 10
 
 
 def _is_nothing(result: Any) -> bool:
@@ -1326,8 +1328,11 @@ def _after_first_page(plan: Dict[str, Any], record: Dict[str, Any], result: Any)
         return None
     if _null_is_end(record, result, plan["policy"]):
         return None
-    return dict(want=plan["size"], fetch_page_size=plan["size"], start_from=plan["start"] + plan["size"],
-                end_policy=plan["policy"])
+    # Bound the cost (step-3 read-back, REQUIRED 1): page on at no less than the default fetch size, and for
+    # at most AFTER_EMPTY_MAX_PAGES pages, so one empty tile costs at most 1 + 10 requests, not 80 at size 25.
+    # When that stops it the end is "capped", which still reads as "nothing in the first N positions".
+    return dict(want=plan["size"], fetch_page_size=max(plan["size"], DEFAULT_FETCH_PAGE_SIZE),
+                start_from=plan["start"] + plan["size"], end_policy=plan["policy"], max_pages=AFTER_EMPTY_MAX_PAGES)
 
 
 def _full_read(plan: Dict[str, Any]) -> Optional[Dict[str, Any]]:

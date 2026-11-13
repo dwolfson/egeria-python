@@ -116,6 +116,37 @@ def test_rows_on_the_first_page_are_not_paged_and_end_first_page(server):
     assert srv.calls == [(0, 100)]
 
 
+# ── the cost of paging on (step-3 read-back, REQUIRED 1) ──
+
+def run25(fmt="DICT"):
+    return fse.exec_report_spec("Risk-DrE-Basic", output_format=fmt,
+                                params={"search_string": "Risk::", "page_size": 25}, view_server="vs",
+                                view_url="https://localhost:1", user="u", user_pass="", token="t")
+
+
+def test_all_filtered_at_size_25_costs_at_most_eleven_requests(server):
+    srv = server("find_things", {n: [] for n in range(0, 5000, 25)})
+    r = run25()
+    assert r["kind"] == "empty" and r["end"] == "capped"
+    assert r["notes"] == ["nothing in the first 1025 positions; can't rule out more"]
+    assert srv.calls == [(0, 25)] + [(25 + 100 * i, 100) for i in range(fse.AFTER_EMPTY_MAX_PAGES)]
+    assert len(srv.calls) == 11
+
+
+def test_suspect_null_at_size_25_costs_five_requests(server):
+    srv = server("find_things", {})
+    r = run25()
+    assert r["kind"] == "empty" and r["end"] == "not_confirmed"
+    assert srv.calls == [(0, 25), (25, 100), (125, 100), (225, 100), (325, 100)]
+
+
+def test_paging_on_at_size_25_still_returns_at_most_the_tile_size(server):
+    srv = server("find_things", {0: [], 25: [ROW(n) for n in range(100)]})
+    r = run25()
+    assert len(r["data"]) == 25 and r["end"] == "capped"
+    assert srv.calls == [(0, 25), (25, 100)]
+
+
 # ── text formats: first page only, and the exact words ──
 
 @pytest.mark.parametrize("fmt", ["REPORT", "MD", "LIST", "FORM", "HTML", "MERMAID"])
@@ -172,7 +203,8 @@ def test_preview_cap_says_may_be_more_when_the_end_is_not_reached():
     _cap = __import__("importlib").import_module("pyegeria.authoring.preview")._cap
     notes = []
     out = _cap({"kind": "json", "data": [ROW(1)], "end": "first_page"}, 25, notes)
-    assert out["capped"] is True and out["shown"] == 1 and "may be more" in notes[0]
+    assert out["capped"] is True and out["shown"] == 1
+    assert notes == ["1 rows shown; Egeria didn't confirm there are no more"]
     notes = []
     out = _cap({"kind": "json", "data": [ROW(1)], "end": "confirmed"}, 25, notes)
     assert out["capped"] is False and notes == []
