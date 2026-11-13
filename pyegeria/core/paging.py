@@ -27,12 +27,15 @@ The result says how the read ended, so a caller never shows "nothing" or a total
 Anything but ``confirmed`` is "at least N" (``PageResult.count_text``), never a total.
 
 ``fetch(start, size)`` returns a list (rows; ``[]`` for a filtered page) or anything else (None, pyegeria's
-"No elements found" string) for null. Exceptions from ``fetch`` propagate: the caller decides what a failed
+"No elements found" string) for null. When ``fetch`` is a pyegeria list method, the pager reads what Egeria
+actually sent from the method's list-request record, so a method that collapses ``[]`` into "No elements
+found" still reads as a filtered page (``_end_signal``). Exceptions from ``fetch`` propagate: the caller decides what a failed
 read means. This module only pages; it changes nothing about what pyegeria's public methods return.
 """
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Hashable, List, Optional, Tuple
 
@@ -190,15 +193,54 @@ def _pager(want, fetch_page_size, end_policy, probe_pages, max_empty_rows, max_p
                   max_empty_rows=max_empty_rows, max_pages=max_pages, key=key or default_key)
 
 
+@contextmanager
+def _end_signal():
+    """Record what Egeria actually sent for the list request ``fetch`` makes (pager step 2).
+
+    pyegeria's list helpers note it in ``LIST_REQUEST_RECORD["page"]`` ("null", "empty" or "rows") before a
+    method collapses ``[]`` into "No elements found", so the pager can tell a filtered page from the end
+    without any public method changing what it returns. A caller already recording (``exec_report_spec``
+    reads ``cap``) gets this request's facts merged into its own record afterwards, as if this block were
+    not there: the record keeps the last list request, as it always has."""
+    from pyegeria.core._server_client import LIST_REQUEST_RECORD, recording_list_requests
+    outer = LIST_REQUEST_RECORD.get()
+    with recording_list_requests() as record:
+        yield record
+    if outer is not None:
+        outer.update(record)
+
+
+def _signalled(page: Any, record: dict) -> Any:
+    """``page`` as the pager should read it: ``[]`` when Egeria sent an empty list that the method collapsed,
+    None when Egeria sent null. When no list helper recorded anything (a fetch that isn't a pyegeria list
+    call, or a path not yet routed through the record), ``page`` is read as it is."""
+    sent = record.get("page")
+    if sent == "empty" and not (isinstance(page, list) and page):
+        return []
+    if sent == "null" and not isinstance(page, list):
+        return None
+    return page
+
+
 def page_all(fetch: Callable[[int, int], Any], *, want: Optional[int] = None,
              fetch_page_size: int = DEFAULT_FETCH_PAGE_SIZE, end_policy: str = "suspect",
              probe_pages: int = DEFAULT_PROBE_PAGES, max_empty_rows: int = DEFAULT_MAX_EMPTY_ROWS,
              max_pages: int = DEFAULT_MAX_PAGES, key: Optional[Callable[[Any], Hashable]] = None) -> PageResult:
     """Read every row ``fetch(start, size)`` gives (or the first ``want``), paging until the end is known
-    or a limit stops it. See the module docstring for ``end_policy`` and the ``end`` states."""
+    or a limit stops it. See the module docstring for ``end_policy`` and the ``end`` states.
+
+    ``key`` gives each row's identity, for dropping rows read twice and for the stall guard. The default
+    (``default_key``) is the row's GUID in any of Egeria's shapes, else its JSON content. A caller paging
+    rows that have no GUID and can legitimately repeat (aggregates, counts, value lists) must pass its own
+    ``key``: under the content fallback two equal rows are one row, and a page of them reads as a stall.
+
+    Each ``fetch`` runs inside ``_end_signal``, so a pyegeria list method that collapses ``[]`` into
+    "No elements found" is still read as a filtered page, not as the end."""
     pager = _pager(want, fetch_page_size, end_policy, probe_pages, max_empty_rows, max_pages, key)
     while (req := pager.request()) is not None:
-        pager.feed(fetch(*req))
+        with _end_signal() as record:
+            page = fetch(*req)
+        pager.feed(_signalled(page, record))
     return pager.result
 
 
@@ -207,8 +249,10 @@ async def async_page_all(fetch: Callable[[int, int], Awaitable[Any]], *, want: O
                          probe_pages: int = DEFAULT_PROBE_PAGES, max_empty_rows: int = DEFAULT_MAX_EMPTY_ROWS,
                          max_pages: int = DEFAULT_MAX_PAGES,
                          key: Optional[Callable[[Any], Hashable]] = None) -> PageResult:
-    """``page_all`` for an async ``fetch``."""
+    """``page_all`` for an async ``fetch`` (same ``key`` and end-signal rules)."""
     pager = _pager(want, fetch_page_size, end_policy, probe_pages, max_empty_rows, max_pages, key)
     while (req := pager.request()) is not None:
-        pager.feed(await fetch(*req))
+        with _end_signal() as record:
+            page = await fetch(*req)
+        pager.feed(_signalled(page, record))
     return pager.result
