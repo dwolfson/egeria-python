@@ -191,3 +191,61 @@ def test_relationship_headers_and_unkeyed_items_dedupe():
     srv = Server({0: [rel, "loose"], 100: [dict(rel)]})
     r = page_all(srv, end_policy="trusted")
     assert r.items == [rel, "loose"] and r.end == "stalled"
+
+
+# ── rows decoded afresh from JSON on every page (read-back of 82ca106a) ──
+
+import json  # noqa: E402
+
+from pyegeria.core.paging import default_key  # noqa: E402
+
+EGERIA6_ELEMENTS = [{"elementHeader": {"guid": "g1", "type": {"typeName": "Topic"}},
+                     "properties": {"displayName": "openlineage.events"}},
+                    {"elementHeader": {"guid": "g2", "type": {"typeName": "Topic"}},
+                     "properties": {"displayName": "openlineage.events"}}]
+METADATA_EXPERT_ELEMENTS = [{"class": "OpenMetadataElement", "elementGUID": "g1",
+                             "elementProperties": {"displayName": "openlineage.events"}},
+                            {"class": "OpenMetadataElement", "elementGUID": "g2",
+                             "elementProperties": {"displayName": "openlineage.events"}}]
+METADATA_EXPERT_RELATIONSHIPS = [{"class": "OpenMetadataRelationship", "relationshipGUID": "r1"},
+                                 {"class": "OpenMetadataRelationship", "relationshipGUID": "r2"}]
+
+
+class JsonServer(Server):
+    """Like Server, but every page is a fresh json.loads of its text, as from the wire."""
+
+    def __call__(self, start, size):
+        page = super().__call__(start, size)
+        return json.loads(json.dumps(page)) if isinstance(page, list) else page
+
+
+@pytest.mark.parametrize("rows", [EGERIA6_ELEMENTS, METADATA_EXPERT_ELEMENTS, METADATA_EXPERT_RELATIONSHIPS],
+                         ids=["egeria6", "metadata-expert-elements", "metadata-expert-relationships"])
+def test_the_same_rows_decoded_twice_stall(rows):
+    # The Architect's repro: the same 2 rows at startFrom 0 and 2, then null (trusted).
+    r = page_all(JsonServer({0: rows, 2: rows}), fetch_page_size=2, end_policy="trusted")
+    assert len(r.items) == 2 and r.end == "stalled"
+
+
+@pytest.mark.parametrize("rows", [EGERIA6_ELEMENTS, METADATA_EXPERT_ELEMENTS, METADATA_EXPERT_RELATIONSHIPS],
+                         ids=["egeria6", "metadata-expert-elements", "metadata-expert-relationships"])
+def test_overlapping_decoded_pages_dedupe(rows):
+    r = page_all(JsonServer({0: rows, 2: rows[1:]}), fetch_page_size=2, end_policy="trusted")
+    assert len(r.items) == 2 and r.end == "stalled"
+    r = page_all(JsonServer({0: rows[:1], 2: rows}), fetch_page_size=2, end_policy="trusted")
+    assert len(r.items) == 2 and r.end == "confirmed"
+
+
+def test_default_key_reads_every_guid_shape():
+    assert default_key(EGERIA6_ELEMENTS[0]) == "g1"
+    assert default_key(METADATA_EXPERT_ELEMENTS[1]) == "g2"
+    assert default_key(METADATA_EXPERT_RELATIONSHIPS[0]) == "r1"
+    assert default_key({"relationshipHeader": {"guid": "r9"}}) == "r9"
+    assert default_key({"guid": "g9"}) == "g9"
+
+
+def test_rows_without_a_guid_are_keyed_by_content_not_identity():
+    a, b = {"displayName": "x"}, {"displayName": "x"}
+    assert a is not b and default_key(a) == default_key(b)
+    assert default_key({"displayName": "y"}) != default_key(a)
+    assert default_key({"elementGUID": ""}) != default_key({"elementGUID": "", "n": 1})   # empty guid: content

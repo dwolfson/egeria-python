@@ -32,6 +32,7 @@ read means. This module only pages; it changes nothing about what pyegeria's pub
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Hashable, List, Optional, Tuple
 
@@ -64,13 +65,29 @@ class PageResult:
         return str(n) if self.complete else f"at least {n}"
 
 
+_GUID_FIELDS = ("guid", "elementGUID", "relationshipGUID")
+
+
 def default_key(item: Any) -> Hashable:
-    """An element's GUID (Egeria 6 elementHeader, or a relationship header), else the object's identity."""
+    """A row's GUID, whichever shape it comes in:
+
+    - an Egeria 6 element or relationship: ``elementHeader.guid`` / ``relationshipHeader.guid``;
+    - the metadata-expert shape (``OpenMetadataElement``, ``OpenMetadataRelationship``): ``elementGUID`` /
+      ``relationshipGUID`` on the row itself;
+    - a bare ``guid`` on the row.
+
+    A row with none of these is keyed by its content (equal JSON, equal key), never by object identity:
+    every page is decoded afresh, so the same row read twice is two different objects."""
     if isinstance(item, dict):
         for holder in (item.get("elementHeader"), item.get("relationshipHeader"), item):
-            if isinstance(holder, dict) and isinstance(holder.get("guid"), str):
-                return holder["guid"]
-    return id(item)
+            if isinstance(holder, dict):
+                for name in _GUID_FIELDS:
+                    if isinstance(holder.get(name), str) and holder[name]:
+                        return holder[name]
+    try:
+        return "content:" + json.dumps(item, sort_keys=True, default=str)
+    except (TypeError, ValueError):   # a circular or otherwise undumpable row: identity is all there is
+        return id(item)
 
 
 @dataclass
