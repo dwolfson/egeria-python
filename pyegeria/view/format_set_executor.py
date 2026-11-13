@@ -554,6 +554,13 @@ def _normalize_report_params(params: Dict[str, Any], action_mode: str = "generic
         if list_key in normalized:
             normalized[list_key] = _to_string_list(normalized.get(list_key))
 
+    # The header-status filter takes Egeria's ElementStatus only: refuse DRAFT, APPROVED, ... (content,
+    # activity or deployment statuses) in words here, before a client is built, rather than letting Egeria 400.
+    from pyegeria.models.element_status import check_element_statuses
+    for status_key in ("limit_results_by_status", "limit_result_by_status"):
+        if normalized.get(status_key) not in (None, "", []):
+            normalized[status_key] = check_element_statuses(normalized[status_key], field=status_key)
+
     cleaned: Dict[str, Any] = {}
     for key, value in normalized.items():
         if isinstance(value, str):
