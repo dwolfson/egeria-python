@@ -7,6 +7,7 @@ GovernanceOfficer.find_governance_definitions, and Egeria answered 400 ("Cannot 
 ElementStatus from String "DRAFT""). DRAFT is a contentStatus value; the header-status filter never accepted it.
 """
 import json
+import os
 import re
 import warnings
 from pathlib import Path
@@ -127,12 +128,16 @@ def test_statuses_no_element_can_hold_pass_with_a_warning():
         assert check_element_statuses(["ACTIVE", "DELETED"]) == ["ACTIVE", "DELETED"]
 
 
-_ENUMS = Path.home() / "localGit/egeria-v6/egeria/open-metadata-implementation/frameworks/open-metadata-framework" \
-                       "/src/main/java/org/odpi/openmetadata/frameworks/openmetadata"
+# Opt-in: set PYEGERIA_EGERIA_SRC to an odpi/egeria checkout (its root) on the commit you want to compare with.
+# Never a default path: a stale local checkout would otherwise fail an unrelated release run.
+_SRC = os.environ.get("PYEGERIA_EGERIA_SRC")
+_ENUMS = Path(_SRC).expanduser() / "open-metadata-implementation/frameworks/open-metadata-framework/src/main/java" \
+                                   "/org/odpi/openmetadata/frameworks/openmetadata" if _SRC else None
 
 
-@pytest.mark.skipif(not _ENUMS.is_dir(), reason="no local odpi/egeria checkout to compare the enums against")
+@pytest.mark.skipif(not _SRC, reason="PYEGERIA_EGERIA_SRC not set (an odpi/egeria checkout to compare the enums with)")
 def test_the_offline_tables_equal_egerias_java_enums():
+    assert _ENUMS.is_dir(), f"PYEGERIA_EGERIA_SRC={_SRC!r} has no {_ENUMS}"
     def constants(path):
         return set(re.findall(r"^\s+([A-Z_]+)\s*\(", path.read_text(), re.M))
     assert constants(_ENUMS / "search/ElementStatus.java") == ELEMENT_STATUSES

@@ -94,7 +94,11 @@ def check_element_statuses(values: Optional[Iterable[str]], *, field: str = "lim
     """`values` upper-cased, or InvalidElementStatus naming each value that isn't an element status, the status
     property it belongs to and where that lives. None and an empty list pass through unchanged (no status
     filter). A lone string counts as one value. UNKNOWN, INVALID and OTHER pass, with an UnheldElementStatusWarning:
-    Egeria accepts them, but no element can hold them."""
+    Egeria accepts them, but no element can hold them.
+
+    Under ``-W error`` (or a ``filterwarnings = error`` test setting) that warning becomes an exception. Raised in
+    the request-body validator, it is not a ValueError, so pydantic doesn't wrap it: it propagates raw as
+    UnheldElementStatusWarning, not as a ValidationError / PyegeriaInvalidParameterException."""
     if values is None:
         return None
     if isinstance(values, str):
