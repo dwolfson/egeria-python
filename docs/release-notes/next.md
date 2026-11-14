@@ -18,3 +18,9 @@ Notes collected on `release/next` for the next release. The version number is se
   Egeria holds it couldn't be told; never to be read as "none") or `"refused"` (anything else, the default).
   `ANSWER_ABSENT`, `ANSWER_UNKNOWN` and `ANSWER_REFUSED` are exported. Branch on `answer`, not on the words. It's
   backward compatible: `AuthoringRefused` is still a `ValueError`, and its words are unchanged.
+
+- **Private drafts are zoned exactly to their author** (`EgeriaDraftStore`, D16). An element whose zones include
+  the author's own zone and others is shared, never a private draft:
+  - save, load and delete refuse it with "a private draft is zoned only to you; publish it to share it";
+  - `list` leaves it out and says so in `notes`;
+  - prune reports it under `not_private`.
