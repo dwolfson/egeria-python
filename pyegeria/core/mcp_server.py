@@ -71,6 +71,21 @@ def _startup_client(settings):
     return client
 
 
+def _startup_sync(client) -> None:
+    """Sync Egeria-held report specs into the spec cache at startup. The spec cache's sync (the system of record
+    for Egeria-held report specs) replaces the deprecated legacy ReportType:: loader, removed in pyegeria 7.
+
+    ``shared=True``, like the Portal and EA: every MCP caller reads this tier, so it holds only specs everyone
+    can read; zoned specs are skipped (the spec-cache identity ruling, 2026-11-14). An MCP user reaches a zoned
+    spec only by fetching it as themselves. A failed sync never stops the server."""
+    try:
+        from pyegeria.view.egeria_spec_cache import sync_report_specs
+        report = sync_report_specs(client, shared=True)
+        logger.debug(f"Egeria report specs synced into the spec cache: {report.render()}")
+    except Exception as sync_error:  # noqa: BLE001 -- best effort at startup
+        logger.warning(f"report spec sync at startup failed ({type(sync_error).__name__}): {sync_error}")
+
+
 def main() -> None:
     # Initialize the server
 
@@ -83,14 +98,7 @@ def main() -> None:
         from pyegeria.core.config import settings as _settings
         GLOBAL_EGERIA_CLIENT = _startup_client(_settings)
         if GLOBAL_EGERIA_CLIENT is not None:
-            # The spec cache's sync (the system of record for Egeria-held report specs) replaces the deprecated
-            # legacy ReportType:: loader, removed in pyegeria 7. A failed sync never stops the server.
-            try:
-                from pyegeria.view.egeria_spec_cache import sync_report_specs
-                report = sync_report_specs(GLOBAL_EGERIA_CLIENT)
-                logger.debug(f"Egeria report specs synced into the spec cache: {report.render()}")
-            except Exception as sync_error:  # noqa: BLE001 -- best effort at startup
-                logger.warning(f"report spec sync at startup failed ({type(sync_error).__name__}): {sync_error}")
+            _startup_sync(GLOBAL_EGERIA_CLIENT)
 
     except ValidationError as e:
         print_validation_error(e)
