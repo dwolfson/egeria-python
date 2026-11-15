@@ -231593,24 +231593,67 @@
             "format": false,
             "detail_spec": null,
             "valid_values": [
-              "UNKNOWN",
+              "ACTIVE",
+              "DELETED"
+            ]
+          },
+          {
+            "name": "Limit Result by Content Status",
+            "key": "limit_result_by_content_status",
+            "value": null,
+            "format": false,
+            "detail_spec": null,
+            "valid_values": [
               "DRAFT",
               "PREPARED",
               "PROPOSED",
               "APPROVED",
               "REJECTED",
-              "APPROVED_CONCEPT",
+              "ACTIVE",
+              "DEPRECATED",
+              "OBSOLETE",
+              "OTHER"
+            ]
+          },
+          {
+            "name": "Limit Result by Deployment Status",
+            "key": "limit_result_by_deployment_status",
+            "value": null,
+            "format": false,
+            "detail_spec": null,
+            "valid_values": [
+              "PROPOSED",
               "UNDER_DEVELOPMENT",
               "DEVELOPMENT_COMPLETE",
               "APPROVED_FOR_DEPLOYMENT",
+              "REJECTED_FOR_DEPLOYMENT",
               "STANDBY",
               "ACTIVE",
-              "FAILED",
               "DISABLED",
-              "COMPLETE",
-              "DEPRECATED",
-              "OTHER",
-              "DELETED"
+              "FAILED",
+              "OTHER"
+            ]
+          },
+          {
+            "name": "Limit Result by Activity Status",
+            "key": "limit_result_by_activity_status",
+            "value": null,
+            "format": false,
+            "detail_spec": null,
+            "valid_values": [
+              "REQUESTED",
+              "APPROVED",
+              "WAITING",
+              "ACTIVATING",
+              "IN_PROGRESS",
+              "PAUSED",
+              "COMPLETED",
+              "INVALID",
+              "IGNORED",
+              "FAILED",
+              "CANCELLED",
+              "ABANDONED",
+              "OTHER"
             ]
           },
           {
@@ -232099,24 +232142,67 @@
             "format": false,
             "detail_spec": null,
             "valid_values": [
-              "UNKNOWN",
+              "ACTIVE",
+              "DELETED"
+            ]
+          },
+          {
+            "name": "Limit Result by Content Status",
+            "key": "limit_result_by_content_status",
+            "value": null,
+            "format": false,
+            "detail_spec": null,
+            "valid_values": [
               "DRAFT",
               "PREPARED",
               "PROPOSED",
               "APPROVED",
               "REJECTED",
-              "APPROVED_CONCEPT",
+              "ACTIVE",
+              "DEPRECATED",
+              "OBSOLETE",
+              "OTHER"
+            ]
+          },
+          {
+            "name": "Limit Result by Deployment Status",
+            "key": "limit_result_by_deployment_status",
+            "value": null,
+            "format": false,
+            "detail_spec": null,
+            "valid_values": [
+              "PROPOSED",
               "UNDER_DEVELOPMENT",
               "DEVELOPMENT_COMPLETE",
               "APPROVED_FOR_DEPLOYMENT",
+              "REJECTED_FOR_DEPLOYMENT",
               "STANDBY",
               "ACTIVE",
-              "FAILED",
               "DISABLED",
-              "COMPLETE",
-              "DEPRECATED",
-              "OTHER",
-              "DELETED"
+              "FAILED",
+              "OTHER"
+            ]
+          },
+          {
+            "name": "Limit Result by Activity Status",
+            "key": "limit_result_by_activity_status",
+            "value": null,
+            "format": false,
+            "detail_spec": null,
+            "valid_values": [
+              "REQUESTED",
+              "APPROVED",
+              "WAITING",
+              "ACTIVATING",
+              "IN_PROGRESS",
+              "PAUSED",
+              "COMPLETED",
+              "INVALID",
+              "IGNORED",
+              "FAILED",
+              "CANCELLED",
+              "ABANDONED",
+              "OTHER"
             ]
           },
           {
@@ -232474,24 +232560,67 @@
             "format": false,
             "detail_spec": null,
             "valid_values": [
-              "UNKNOWN",
+              "ACTIVE",
+              "DELETED"
+            ]
+          },
+          {
+            "name": "Limit Result by Content Status",
+            "key": "limit_result_by_content_status",
+            "value": null,
+            "format": false,
+            "detail_spec": null,
+            "valid_values": [
               "DRAFT",
               "PREPARED",
               "PROPOSED",
               "APPROVED",
               "REJECTED",
-              "APPROVED_CONCEPT",
+              "ACTIVE",
+              "DEPRECATED",
+              "OBSOLETE",
+              "OTHER"
+            ]
+          },
+          {
+            "name": "Limit Result by Deployment Status",
+            "key": "limit_result_by_deployment_status",
+            "value": null,
+            "format": false,
+            "detail_spec": null,
+            "valid_values": [
+              "PROPOSED",
               "UNDER_DEVELOPMENT",
               "DEVELOPMENT_COMPLETE",
               "APPROVED_FOR_DEPLOYMENT",
+              "REJECTED_FOR_DEPLOYMENT",
               "STANDBY",
               "ACTIVE",
-              "FAILED",
               "DISABLED",
-              "COMPLETE",
-              "DEPRECATED",
-              "OTHER",
-              "DELETED"
+              "FAILED",
+              "OTHER"
+            ]
+          },
+          {
+            "name": "Limit Result by Activity Status",
+            "key": "limit_result_by_activity_status",
+            "value": null,
+            "format": false,
+            "detail_spec": null,
+            "valid_values": [
+              "REQUESTED",
+              "APPROVED",
+              "WAITING",
+              "ACTIVATING",
+              "IN_PROGRESS",
+              "PAUSED",
+              "COMPLETED",
+              "INVALID",
+              "IGNORED",
+              "FAILED",
+              "CANCELLED",
+              "ABANDONED",
+              "OTHER"
             ]
           },
           {
@@ -232988,24 +233117,67 @@
             "format": false,
             "detail_spec": null,
             "valid_values": [
-              "UNKNOWN",
+              "ACTIVE",
+              "DELETED"
+            ]
+          },
+          {
+            "name": "Limit Result by Content Status",
+            "key": "limit_result_by_content_status",
+            "value": null,
+            "format": false,
+            "detail_spec": null,
+            "valid_values": [
               "DRAFT",
               "PREPARED",
               "PROPOSED",
               "APPROVED",
               "REJECTED",
-              "APPROVED_CONCEPT",
+              "ACTIVE",
+              "DEPRECATED",
+              "OBSOLETE",
+              "OTHER"
+            ]
+          },
+          {
+            "name": "Limit Result by Deployment Status",
+            "key": "limit_result_by_deployment_status",
+            "value": null,
+            "format": false,
+            "detail_spec": null,
+            "valid_values": [
+              "PROPOSED",
               "UNDER_DEVELOPMENT",
               "DEVELOPMENT_COMPLETE",
               "APPROVED_FOR_DEPLOYMENT",
+              "REJECTED_FOR_DEPLOYMENT",
               "STANDBY",
               "ACTIVE",
-              "FAILED",
               "DISABLED",
-              "COMPLETE",
-              "DEPRECATED",
-              "OTHER",
-              "DELETED"
+              "FAILED",
+              "OTHER"
+            ]
+          },
+          {
+            "name": "Limit Result by Activity Status",
+            "key": "limit_result_by_activity_status",
+            "value": null,
+            "format": false,
+            "detail_spec": null,
+            "valid_values": [
+              "REQUESTED",
+              "APPROVED",
+              "WAITING",
+              "ACTIVATING",
+              "IN_PROGRESS",
+              "PAUSED",
+              "COMPLETED",
+              "INVALID",
+              "IGNORED",
+              "FAILED",
+              "CANCELLED",
+              "ABANDONED",
+              "OTHER"
             ]
           },
           {

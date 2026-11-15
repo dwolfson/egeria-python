@@ -140,7 +140,7 @@ class ListFilters(GetFilters, total=False):
     anchor_scope_guid: str
     """Only return elements whose anchor scope is the element with this GUID."""
     limit_results_by_status: list[str]
-    """Only return elements whose status is one of these, e.g. ``["ACTIVE", "DRAFT"]``."""
+    """Element (instance) status to return: ``ACTIVE`` (the default when empty) and/or ``DELETED`` (soft-deleted), e.g. ``["ACTIVE", "DELETED"]`` for both. Lifecycle (DRAFT, APPROVED, ...) is ``content_status_list`` / ``deployment_status_list`` / ``activity_status_list`` on the finds that take them."""
     sequencing_order: Literal[
         "ANY", "CREATION_DATE_RECENT", "CREATION_DATE_OLDEST", "LAST_UPDATE_RECENT",
         "LAST_UPDATE_OLDEST", "PROPERTY_ASCENDING", "PROPERTY_DESCENDING",

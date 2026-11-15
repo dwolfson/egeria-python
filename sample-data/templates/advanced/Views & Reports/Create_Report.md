@@ -560,13 +560,43 @@ ___
 ### Limit Result by Status
 >	**Input Required**: False
 
->	**Attribute Type**: Valid Value
+>	**Attribute Type**: Simple List
 
->	**Description**: One of the status values from a list of valid values.
+>	**Description**: Element (instance) status to return. Since Egeria's December 2025 change an element's status is only ACTIVE or DELETED: ACTIVE (the default, and what an empty value means) returns live elements; DELETED returns only soft-deleted elements; ACTIVE, DELETED returns both. Write one or both, comma-separated or as a bulleted list. Lifecycle states such as DRAFT, APPROVED or DEPRECATED are no longer element statuses -- filter on them with Limit Result by Content Status, Limit Result by Deployment Status or Limit Result by Activity Status.
 
->	**Valid Values**: UNKNOWN,DRAFT,PREPARED,PROPOSED,APPROVED,REJECTED,APPROVED_CONCEPT,UNDER_DEVELOPMENT,DEVELOPMENT_COMPLETE,APPROVED_FOR_DEPLOYMENT,STANDBY,ACTIVE,FAILED,DISABLED,COMPLETE,DEPRECATED,OTHER,DELETED
+>	**Valid Values**: ACTIVE,DELETED
 
->	**Default Value**: ['ACTIVE']
+>	**Default Value**: ACTIVE
+
+
+### Limit Result by Content Status
+>	**Input Required**: False
+
+>	**Attribute Type**: Simple List
+
+>	**Description**: Only return elements whose contentStatus property is one of these values -- the lifecycle of authored content (glossary terms, collections, data structures, reports, ...). One or more, comma-separated or as a bulleted list. Empty (the default) means no lifecycle filtering. Only report specs whose find method filters by contentStatus use it; for any other report it is ignored with a warning.
+
+>	**Valid Values**: DRAFT,PREPARED,PROPOSED,APPROVED,REJECTED,ACTIVE,DEPRECATED,OBSOLETE,OTHER
+
+
+### Limit Result by Deployment Status
+>	**Input Required**: False
+
+>	**Attribute Type**: Simple List
+
+>	**Description**: Only return elements whose deploymentStatus property is one of these values -- the lifecycle of infrastructure, solution components and capabilities. One or more, comma-separated or as a bulleted list. Empty (the default) means no lifecycle filtering. Only report specs whose find method filters by deploymentStatus use it; for any other report it is ignored with a warning.
+
+>	**Valid Values**: PROPOSED,UNDER_DEVELOPMENT,DEVELOPMENT_COMPLETE,APPROVED_FOR_DEPLOYMENT,REJECTED_FOR_DEPLOYMENT,STANDBY,ACTIVE,DISABLED,FAILED,OTHER
+
+
+### Limit Result by Activity Status
+>	**Input Required**: False
+
+>	**Attribute Type**: Simple List
+
+>	**Description**: Only return elements whose activityStatus property is one of these values -- the lifecycle of actions and processes (to-dos, meetings, governance actions, ...). One or more, comma-separated or as a bulleted list. Empty (the default) means no lifecycle filtering. Only report specs whose find method filters by activityStatus use it; for any other report it is ignored with a warning.
+
+>	**Valid Values**: REQUESTED,APPROVED,WAITING,ACTIVATING,IN_PROGRESS,PAUSED,COMPLETED,INVALID,IGNORED,FAILED,CANCELLED,ABANDONED,OTHER
 
 
 ### Order Property Name
