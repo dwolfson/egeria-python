@@ -49,6 +49,22 @@ Notes collected on `release/next` for the next release. The version number is se
 - **Paging:** `get_elements` (read by type) is `findMetadataElements` underneath, so it's now NULL_NOT_END and
   gate-trusted on a #9453 platform like the other find paths. The dashboard sheet list passes its client, so on
   such a platform it can be confirmed complete.
+- **Paging: one version gate per upstream fix, with odpi/egeria #9454 added** (`pyegeria.core.paging`). The gate
+  used to know one fix (#9453, the find paths). It now holds a table, `FIXES`, with each fix's SNAPSHOT build
+  cutoff, the first release carrying it, and whether later lines' SNAPSHOTs carry it. `METHOD_NEEDS` says which
+  fixes each read needs, and a read is trusted only on a platform carrying all of them. `platform_fixes(client)`
+  / `async_platform_fixes` return the set of fixes a platform carries, from one `/api/about` read per platform,
+  cached as before. `platform_promoted` and `gate_from_about` keep working as before, meaning "carries #9453".
+  `PYEGERIA_TRUSTED_END=off` still turns every fix off, and there is still no "force on".
+  - **#9454** (970092b9) makes `get_relationships` and `get_related_elements` send `[]` for a filtered page and
+    null only at the end. On a platform carrying it (a 6.3-SNAPSHOT built at or after 2026-11-15T07:26Z, or any
+    later line's SNAPSHOT), both reads are now trusted, so their results can be confirmed complete. No release is
+    trusted for #9454 until it is confirmed in a tagged release (expected 6.3.0).
+  - **Without #9454**, `get_relationships` stays NULL_NOT_END: "at least N", never a total. Its async name,
+    `_async_get_relationships` (what report specs page under), is now NULL_NOT_END too. It wasn't before, but it
+    is the same server call. `get_related_elements` keeps today's paging there.
+  - The saved-query delete and the dashboard-sheet link reads now pass their client, so they can be confirmed
+    complete on a #9454 platform. With no change to them, `used_by` and My Egeria's network list can too.
 
 ## Planned for pyegeria 7 (expected early January 2027)
 
