@@ -98,3 +98,11 @@ Notes collected on `release/next` for the next release. The version number is se
   - A caller without real `view_server` and `platform_url` strings (a fake, or anything that isn't a client) gets
     "unknown". No client is built.
   - The explorer is closed after the read.
+
+## Fixes (drafts)
+
+- **Private drafts are zoned exactly to their author** (`EgeriaDraftStore`, D16). An element whose zones include
+  the author's own zone and others is shared, never a private draft:
+  - save, load and delete refuse it with "a private draft is zoned only to you; publish it to share it";
+  - `list` leaves it out and says so in `notes`;
+  - prune reports it under `not_private`.
