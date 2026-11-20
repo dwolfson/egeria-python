@@ -1275,6 +1275,7 @@ base_report_specs = FormatSetDict({
                 Column(name="Project Type", key="projectType"),
                 Column(name="Description", key="description"),
                 Column(name="Priority", key="priority"),
+                Column(name="Scope", key="scope"),
                 Column(name="GUID", key="guid", format=True),
             ],
         )
